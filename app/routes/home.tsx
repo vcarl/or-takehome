@@ -83,14 +83,13 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 type Opt = { slug: string; name: string; tokens: number };
-const CONF = ["lean", "likely", "lock"] as const;
-type Conf = (typeof CONF)[number];
+const CYCLE: Conf[] = ["lean", "likely", "lock"];
 const CONF_LABEL: Record<Conf, string> = { lean: "Lean", likely: "Likely", lock: "Lock" };
 /** Tap-to-rank: tapping a model fills the next empty slot; tapping a filled slot (or the model again) clears it. */
 function SlateHero({ marketId, options, betCount, karma, result }: { marketId: number; options: Opt[]; betCount: number; karma: number | null; result?: { error: string } | { ok: string } }) {
   const [slots, setSlots] = useState<(string | null)[]>([null, null, null, null, null]);
   const [conf, setConf] = useState<Conf[]>(["lean", "lean", "lean", "lean", "lean"]);
-  const cycle = (i: number) => setConf((cur) => cur.map((c, j) => (j === i ? CONF[(CONF.indexOf(c) + 1) % CONF.length]! : c)));
+  const cycle = (i: number) => setConf((cur) => cur.map((c, j) => (j === i ? CYCLE[(CYCLE.indexOf(c) + 1) % CYCLE.length]! : c)));
   const byslug = new Map(options.map((o) => [o.slug, o]));
   const toggle = (slug: string) =>
     setSlots((cur) => {
