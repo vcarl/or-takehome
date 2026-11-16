@@ -26,8 +26,16 @@ const loadNamesFixture = () => parseModelNames(JSON.parse(readFileSync(resolve(i
 
 function seedDemo(fixture: string, players = false) {
   if (db.prepare("SELECT 1 FROM markets LIMIT 1").get()) throw new Error("seed-demo needs a fresh DB (markets already exist); delete data/ first");
-  const ds = parseDataset(JSON.parse(readFileSync(resolve(fixture), "utf8")));
-  storeSnapshot(ds, `fixture:${fixture}`);
+  const raw = parseDataset(JSON.parse(readFileSync(resolve(fixture), "utf8")));
+  // Shift the recorded weeks forward by whole weeks so the fixture's last week lines up with the real
+  // current week; otherwise a clone made after the fixture date has no open market. Order and values are untouched.
+  const shift = Math.max(0, Math.round((Date.parse(weekStart(new Date())) - Date.parse(weekStart(raw.asOf))) / 864e5));
+  const ds = shift === 0 ? raw : {
+    asOf: new Date(Math.min(Date.parse(raw.asOf) + shift * 864e5, Date.now())).toISOString(),
+    rows: raw.rows.map((r) => ({ ...r, weekStart: addDays(r.weekStart, shift) })),
+  };
+  storeSnapshot(ds, shift ? `fixture:${fixture} (dates shifted +${shift}d)` : `fixture:${fixture}`);
+  if (shift) console.log(`fixture dates shifted forward ${shift / 7} weeks to the current week`);
   storeModelNames(loadNamesFixture());
   // Demo "now" = the fixture's as_of. Last complete week is resolved (with the 2 before it); the week
   // containing as_of is locked (started, unresolved); the next week is open for live betting.
