@@ -68,3 +68,8 @@ footer div { border-top: 1px solid var(--border); padding-top: var(--space); col
 @media (max-width: 600px) { .slate { grid-template-columns: 1fr; } }
 .hero-submit { display: flex; gap: var(--space); align-items: center; flex-wrap: wrap; }
 .hero-submit input { width: 6rem; }
+.why summary { cursor: pointer; list-style: none; font-variant-numeric: tabular-nums; }
+.why summary::-webkit-details-marker { display: none; }
+.why .info { color: var(--muted); font-size: .85em; }
+.why[open] .info { color: var(--accent); }
+.why > span { display: block; font-size: .85em; }
