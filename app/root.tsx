@@ -33,7 +33,7 @@ export default function App() {
       <header>
         <Link to="/" className="brand">OR Futures</Link>
         <nav>
-          <NavLink to="/" end>Markets</NavLink>
+          <NavLink to="/markets">Markets</NavLink>
           <NavLink to="/me">My bets</NavLink>
           <NavLink to="/leaderboard">Leaderboard</NavLink>
         </nav>
@@ -47,7 +47,7 @@ export default function App() {
         )}
       </header>
       <main><Outlet /></main>
-      {asOf && <footer>Source: OpenRouter (openrouter.ai/rankings), as of {asOf}.</footer>}
+      {asOf && <footer><div>Source: OpenRouter (openrouter.ai/rankings), as of {asOf}.</div></footer>}
     </>
   );
 }
@@ -58,7 +58,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     <main>
       <h1>Something went wrong</h1>
       <p className="error">{msg}</p>
-      <Link to="/">Back to markets</Link>
+      <Link to="/markets">Back to markets</Link>
     </main>
   );
 }

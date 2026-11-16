@@ -75,3 +75,12 @@ export const leaderboard = () =>
        (SELECT COUNT(*) FROM winnings_ledger WHERE user_id = u.id) AS hits
      FROM users u ORDER BY winnings DESC, u.username`,
   );
+
+/** Per-model weekly totals, oldest first, excluding the long-tail "other" row. */
+export function usageByModel(): Map<string, { week: string; tokens: number }[]> {
+  const out = new Map<string, { week: string; tokens: number }[]>();
+  for (const r of rows<{ week_start: string; model_permaslug: string; total_tokens: number }>(
+    "SELECT week_start, model_permaslug, total_tokens FROM weekly_usage WHERE model_permaslug != 'other' ORDER BY week_start",
+  )) out.set(r.model_permaslug, [...(out.get(r.model_permaslug) ?? []), { week: r.week_start, tokens: r.total_tokens }]);
+  return out;
+}
