@@ -77,3 +77,10 @@ footer div { border-top: 1px solid var(--border); padding-top: var(--space); col
 .slots li.drop-target .slot { border-style: solid; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .grip { flex: none; width: .8em; align-self: center; color: var(--muted); line-height: 1; cursor: grab; }
 .slots li[draggable=true]:hover .grip { color: var(--accent); }
+.growth-form { display: flex; flex-direction: column; gap: .35rem; margin-top: auto; }
+.growth-slider { display: flex; flex-direction: column; gap: .2rem; }
+.growth-slider input { width: 100%; accent-color: var(--accent); }
+.growth-submit { display: flex; gap: .5rem; align-items: center; justify-content: space-between; }
+.growth-submit input { width: 4.5rem; }
+.grid .card h2 a { color: inherit; text-decoration: none; }
+.grid .card h2 a:hover { text-decoration: underline; }

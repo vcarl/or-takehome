@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { Form, Link } from "react-router";
+import { Form, Link, useFetcher } from "react-router";
 import type { Route } from "./+types/home";
 import { isCovered, placeBet } from "../markets.server.ts";
 import { getUser, requireUser } from "../session.server.ts";
 import { modelNames } from "../rankings.server.ts";
 import { crowdFor, listMarkets, marketBets, usageByModel } from "../queries.server.ts";
 import { compact, displayName } from "../format.ts";
-import type { Conf } from "../domain/payout.ts";
+import type { Conf, House } from "../domain/payout.ts";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const now = Date.now();
@@ -42,6 +42,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     // Complete weeks only: the trailing bucket is partial and would fake a crash.
     const series = (usage.get(m.model_permaslug!) ?? []).filter((p) => isCovered(p.week));
     const last = series.at(-1)?.tokens ?? null;
+    const mine = user ? bets.find((b) => b.user_id === user.id) : undefined;
     const prev = series.at(-2)?.tokens;
     return {
       kind: "growth" as const,
@@ -53,6 +54,8 @@ export async function loader({ request }: Route.LoaderArgs) {
       betCount: bets.length,
       crowd,
       median: crowd?.kind === "growth" ? crowd.median : null,
+      house: (m.house_json ? JSON.parse(m.house_json) : { low: -40, high: 40 }) as House,
+      mine: mine ? { pct: mine.predicted_pct!, stake: mine.stake } : null,
     };
   });
   const settled = [...new Set(all.filter((m) => m.status === "resolved").map((m) => m.week_start))].map((w) => {
@@ -68,10 +71,18 @@ export async function loader({ request }: Route.LoaderArgs) {
   return { week, closes, cards, settled, scale, user };
 }
 
-/** Hero form: submit a top5 slate without leaving the page. */
+/** Home forms: growth cards (via fetcher, field `pct`) and the top5 slate hero, without leaving the page. */
 export async function action({ request }: Route.ActionArgs) {
   const user = await requireUser(request);
   const f = await request.formData();
+  if (f.has("pct")) {
+    try {
+      placeBet(user.id, Number(f.get("market")), Number(f.get("stake")), { pct: Number(f.get("pct")) });
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "Prediction failed" };
+    }
+    return { ok: "Prediction placed" };
+  }
   const slate = [1, 2, 3, 4, 5].map((i) => String(f.get(`slot${i}`) ?? ""));
   if (slate.some((s) => !s)) return { error: "Fill all 5 slots" };
   const conf = [1, 2, 3, 4, 5].map((i) => String(f.get(`conf${i}`) || "lean") as Conf);
@@ -185,6 +196,37 @@ function SlateHero({ marketId, options, betCount, karma, result }: { marketId: n
   );
 }
 
+const signed = (x: number) => `${x > 0 ? "+" : ""}${x.toFixed(0)}%`;
+
+/** In-card growth prediction: one slider for the median; the 80% range defaults to the house range around it. */
+function GrowthForm({ marketId, house, mine, median, betCount, karma }: { marketId: number; house: House; mine: { pct: number; stake: number } | null; median: number | null; betCount: number; karma: number | null }) {
+  const fetcher = useFetcher<typeof action>();
+  const [pct, setPct] = useState(0);
+  if (mine)
+    return (
+      <p className="muted">
+        You: <strong>{signed(mine.pct)}</strong> ({mine.stake} karma){median !== null && <> · Crowd {signed(median)} · {betCount} {betCount === 1 ? "prediction" : "predictions"}</>}
+      </p>
+    );
+  if (karma === null) return <Link className="btn" to="/login">Log in to predict</Link>;
+  const res = fetcher.data;
+  return (
+    <fetcher.Form method="post" className="growth-form">
+      <input type="hidden" name="market" value={marketId} />
+      <label className="growth-slider">
+        <span>Next week <output className="stat">{signed(pct)}</output></span>
+        <input type="range" name="pct" min={-50} max={50} step={1} value={pct} onChange={(e) => setPct(Number(e.target.value))} />
+      </label>
+      <span className="muted">House: +0% (80% range {signed(house.low)} to {signed(house.high)}) · {betCount} {betCount === 1 ? "prediction" : "predictions"}</span>
+      <div className="growth-submit">
+        <label>Stake <input name="stake" type="number" min="1" max="100" step="1" defaultValue={10} required /></label>
+        <button className="btn" type="submit" disabled={fetcher.state !== "idle"}>Predict</button>
+      </div>
+      {res && "error" in res && <p className="error" role="alert">{res.error}</p>}
+    </fetcher.Form>
+  );
+}
+
 const dm = (w: string) => new Date(`${w}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 
 type Scale = { lo: number; hi: number; span: number };
@@ -212,7 +254,7 @@ export default function Home({ loaderData: { week, closes, cards, settled, scale
             <SlateHero key={c.m.id} marketId={c.m.id} options={c.options} betCount={c.betCount} karma={user?.karma ?? null} result={actionData} />
           ) : (
             <section key={c.m.id} className="card">
-              <h2 title={c.m.model_permaslug!}>{c.name}</h2>
+              <h2 title={c.m.model_permaslug!}><Link to={`/markets/${c.m.id}`}>{c.name}</Link></h2>
               <Spark values={c.series} name={c.name} scale={scale} />
               <span>
                 <span className="stat">{c.last === null ? "--" : compact(c.last)}</span>{" "}
@@ -220,8 +262,7 @@ export default function Home({ loaderData: { week, closes, cards, settled, scale
                   <span className={c.wow >= 0 ? "up" : "down"}>{c.wow >= 0 ? "▲" : "▼"} {Math.abs(c.wow).toFixed(1)}%</span>
                 )}
               </span>
-              {c.median !== null && <span className="muted">Crowd: {`${c.median > 0 ? "+" : ""}${c.median.toFixed(0)}%`} · {c.betCount} predictions</span>}
-              <Link className="btn" to={`/markets/${c.m.id}`}>{c.betCount === 0 ? "Make the first prediction" : "Predict"}</Link>
+              <GrowthForm marketId={c.m.id} house={c.house} mine={c.mine} median={c.median} betCount={c.betCount} karma={user?.karma ?? null} />
             </section>
           ),
         )}
