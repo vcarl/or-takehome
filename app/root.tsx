@@ -1,10 +1,11 @@
 import { Form, isRouteErrorResponse, Link, Links, Meta, NavLink, Outlet, Scripts, ScrollRestoration, useLoaderData } from "react-router";
 import type { Route } from "./+types/root";
 import { getUser } from "./session.server.ts";
+import { latestAsOf } from "./rankings.server.ts";
 import { fmt } from "./format.ts";
 import "./styles.css";
 
-export const loader = async ({ request }: Route.LoaderArgs) => ({ user: await getUser(request) });
+export const loader = async ({ request }: Route.LoaderArgs) => ({ user: await getUser(request), asOf: latestAsOf() });
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -26,7 +27,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { user } = useLoaderData<typeof loader>();
+  const { user, asOf } = useLoaderData<typeof loader>();
   return (
     <>
       <header>
@@ -46,6 +47,7 @@ export default function App() {
         )}
       </header>
       <main><Outlet /></main>
+      {asOf && <footer>Source: OpenRouter (openrouter.ai/rankings), as of {asOf}.</footer>}
     </>
   );
 }

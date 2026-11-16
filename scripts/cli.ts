@@ -10,49 +10,39 @@ import {
   placeBet,
   resolveReady,
 } from "../app/markets.server.ts";
-import { extractWeeklyUsage, fetchRankingsHtml, storeSnapshot, type WeeklyUsage } from "../app/rankings.server.ts";
+import { fetchDataset, parseDataset, storeSnapshot } from "../app/rankings.server.ts";
+
+try {
+  process.loadEnvFile(".env"); // CLI only (key is read lazily by fetchDataset, never printed)
+} catch {} // .env optional
 
 const [cmd, ...args] = process.argv.slice(2);
 const db = getDb();
 
 async function takeSnapshot(fixture?: string) {
-  const html = fixture ? readFileSync(resolve(fixture), "utf8") : await fetchRankingsHtml();
-  const rows = extractWeeklyUsage(html);
-  const r = storeSnapshot(rows, fixture ? `fixture:${fixture}` : "live");
-  console.log(`snapshot ${r.snapshotId}: ${rows.length} rows, ${r.from}..${r.to}`);
-}
-
-/** Demo only: the fixture holds one real week, so earlier weeks are synthesized (deterministically) from it. */
-function synthesize(real: WeeklyUsage[], weeks: string[]): WeeklyUsage[] {
-  const models = [...new Set(real.map((r) => r.model))].sort();
-  return weeks.flatMap((weekStart, wi) =>
-    models.map((model, i) => {
-      const base = real.find((r) => r.model === model)!;
-      const f = 1 + 0.25 * Math.sin(i * 1.7 + wi * 2.1) + 0.03 * ((i % 5) - 2) * (wi - 1);
-      return { weekStart, model, prompt: Math.round(base.prompt * f), completion: Math.round(base.completion * f) };
-    }),
-  );
+  const ds = fixture ? parseDataset(JSON.parse(readFileSync(resolve(fixture), "utf8"))) : await fetchDataset();
+  const r = storeSnapshot(ds, fixture ? `fixture:${fixture}` : "live");
+  console.log(`snapshot ${r.snapshotId}: ${ds.rows.length} rows, weeks ${r.from}..${r.to}, as_of ${ds.asOf}`);
 }
 
 function seedDemo(fixture: string) {
   if (db.prepare("SELECT 1 FROM markets LIMIT 1").get()) throw new Error("seed-demo needs a fresh DB (markets already exist); delete data/ first");
-  const real = extractWeeklyUsage(readFileSync(resolve(fixture), "utf8"));
-  const realWeek = real[0]!.weekStart; // latest real week, resolvable
-  const w = (n: number) => addDays(realWeek, n * 7);
-  storeSnapshot(synthesize(real, [w(-3), w(-2), w(-1)]), "demo-synthetic");
-  storeSnapshot(real, `fixture:${fixture}`); // real week written last
-  // Demo "now" = the day after the real week ends. Week w(1) has started (locked, unresolved);
-  // w(2) is the open one, built from the most recent available prior week (the real one).
-  const demoNow = new Date(`${addDays(realWeek, 7)}T12:00:00Z`);
+  const ds = parseDataset(JSON.parse(readFileSync(resolve(fixture), "utf8")));
+  storeSnapshot(ds, `fixture:${fixture}`);
+  // Demo "now" = the fixture's as_of. Last complete week is resolved (with the 2 before it); the week
+  // containing as_of is locked (started, unresolved); the next week is open for live betting.
+  const demoNow = new Date(ds.asOf);
+  const cur = weekStart(demoNow);
+  const w = (n: number) => addDays(cur, n * 7);
   const users = ["alice", "bob", "carol", "dave"];
-  const ids = users.map((u) => getOrCreateUser(u, new Date(`${w(-3)}T00:00:00Z`)));
+  const ids = users.map((u) => getOrCreateUser(u, new Date(`${w(-4)}T00:00:00Z`)));
   const marketsFor = (w: string) =>
     db.prepare("SELECT * FROM markets WHERE week_start = ? ORDER BY id").all(w) as unknown as {
       id: number; kind: string; options_json: string | null; model_permaslug: string | null;
     }[];
   let k = 0;
   // Weeks to bet on, each before it starts, using an injected clock instead of bypassing validation.
-  for (const wk of [w(-2), w(-1), w(0), w(1), w(2)]) {
+  for (const wk of [w(-3), w(-2), w(-1), w(0), w(1)]) {
     openWeek(wk);
     const clock = new Date(Math.min(Date.parse(`${addDays(wk, -1)}T12:00:00Z`), demoNow.getTime()));
     for (const uid of ids) ensureWeeklyGrant(uid, clock);
@@ -73,7 +63,7 @@ function seedDemo(fixture: string) {
     }
     resolveReady();
   }
-  console.log(`seeded demo users: ${users.join(", ")}; resolved weeks ${w(-2)}..${w(0)}; locked ${w(1)}; open ${w(2)}`);
+  console.log(`seeded demo users: ${users.join(", ")}; resolved weeks ${w(-3)}..${w(-1)}; locked ${w(0)}; open ${w(1)}`);
 }
 
 switch (cmd) {
@@ -94,7 +84,7 @@ switch (cmd) {
     console.log(`resolved ${resolveReady()} markets`);
     break;
   case "seed-demo":
-    seedDemo(args[0] ?? resolve(import.meta.dirname, "../fixtures/rankings-2026-11-16.html"));
+    seedDemo(args[0] ?? resolve(import.meta.dirname, "../fixtures/rankings-weekly.json"));
     break;
   default:
     console.error("usage: dev [snapshot [--fixture path] | open-week [YYYY-MM-DD] | resolve | seed-demo | test]");

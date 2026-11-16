@@ -27,28 +27,39 @@ const num = (v: unknown) => Number(v);
 function weekRows(week: string): WeeklyRow[] {
   return getDb()
     .prepare(
-      `SELECT week_start AS week, model_permaslug AS model, prompt_tokens + completion_tokens AS tokens
+      `SELECT week_start AS week, model_permaslug AS model, total_tokens AS tokens
        FROM weekly_usage WHERE week_start = ?`,
     )
     .all(week) as unknown as WeeklyRow[];
 }
 
 export function totalsFor(week: string) {
-  return weeklyTotals(weekRows(week), week);
-}
-
-/** `week` is resolvable: weekly_usage has rows for it (rows are whole-week aggregates). */
-export function isCovered(week: string): boolean {
-  return !!getDb().prepare("SELECT 1 FROM weekly_usage WHERE week_start = ? LIMIT 1").get(week);
+  // "other" is the API's aggregate long-tail row, not a model.
+  return weeklyTotals(weekRows(week).filter((r) => r.model !== "other"), week);
 }
 
 /**
- * Creates week's markets from the most recent available prior week's totals (week-7 normally; an earlier
+ * `week` is resolvable: weekly_usage has rows for it AND its last day is complete per the latest snapshot's
+ * as_of (week_start + 7d <= as_of date + 1d). The trailing bucket is partial until then.
+ */
+export function isCovered(week: string): boolean {
+  const db = getDb();
+  if (!db.prepare("SELECT 1 FROM weekly_usage WHERE week_start = ? LIMIT 1").get(week)) return false;
+  const asOf = db.prepare("SELECT as_of FROM snapshots ORDER BY id DESC LIMIT 1").get()?.as_of;
+  return !!asOf && addDays(week, 7) <= addDays(String(asOf).slice(0, 10), 1);
+}
+
+/**
+ * Creates week's markets from the most recent complete prior week's totals (week-7 normally; an earlier
  * week if that one has no data yet, e.g. the demo opens 11-23 from 11-09). Idempotent. Returns new markets.
  */
 export function openWeek(week: string): number {
-  const src = getDb().prepare("SELECT MAX(week_start) AS w FROM weekly_usage WHERE week_start < ?").get(week)?.w;
-  const prior = src ? totalsFor(String(src)) : new Map<string, number>();
+  const weeks = getDb()
+    .prepare("SELECT DISTINCT week_start AS w FROM weekly_usage WHERE week_start < ? ORDER BY w DESC")
+    .all(week)
+    .map((r) => String(r.w));
+  const src = weeks.find(isCovered); // complete weeks only; skips the partial in-progress bucket
+  const prior = src ? totalsFor(src) : new Map<string, number>();
   const db = getDb();
   const ins = db.prepare(
     "INSERT OR IGNORE INTO markets (week_start, kind, model_permaslug, options_json) VALUES (?, ?, ?, ?)",

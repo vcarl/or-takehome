@@ -1,67 +1,75 @@
 import { getDb, tx } from "./db.server.ts";
-import { addDays } from "./domain/week.ts";
+import { addDays, weekStart } from "./domain/week.ts";
 
-export const RANKINGS_URL = "https://openrouter.ai/rankings";
+/**
+ * Official dataset API (CC BY 4.0). period=week buckets by ISO week start (Monday), so `date` is the week_start.
+ * Cite as: "Source: OpenRouter (openrouter.ai/rankings), as of {as_of}." (see latestAsOf()).
+ */
+export const API_URL = "https://openrouter.ai/api/v1/datasets/rankings-daily";
 
 export interface WeeklyUsage {
   weekStart: string; // Monday YYYY-MM-DD
-  model: string;
-  prompt: number;
-  completion: number;
+  model: string; // base permaslug, variants summed; may be the reserved "other" long-tail row
+  tokens: number;
+}
+export interface Dataset {
+  rows: WeeklyUsage[];
+  asOf: string;
+}
+interface ApiResponse {
+  data: { date: string; model_permaslug: string; total_tokens: string }[];
+  meta: { as_of: string };
 }
 
-/**
- * The page embeds TanStack Query dehydrated state (RSC-escaped). The per-model weekly token rows are the
- * query with queryKey ["rankings","models",{"view":"week"}]. (Others: apps, benchmarks, performance,
- * taskSpend.) Rows are WEEKLY aggregates labelled by the week's final day: date 2026-11-15 (a Sunday) =
- * Mon 2026-11-09..Sun 2026-11-15. Assumption (magnitudes are implausible for a single day); we error if a
- * label isn't a Sunday. Each variant is its own row; we sum variants per (week, model).
- */
-export function extractWeeklyUsage(html: string): WeeklyUsage[] {
-  const keyAt = html.indexOf('\\"queryKey\\":[\\"rankings\\",\\"models\\"');
-  if (keyAt < 0) throw new Error("rankings models query not found; page format changed?");
-  const start = html.lastIndexOf('{\\"dehydratedAt\\"', keyAt);
-  const chunk = html.slice(start, keyAt).replaceAll('\\"', '"');
+/** Parses an API response: strips ":variant" suffixes and sums into the base permaslug per week. */
+export function parseDataset(json: ApiResponse): Dataset {
   const sums = new Map<string, WeeklyUsage>();
-  for (const [obj] of chunk.matchAll(/\{"date":"[^{}]*\}/g)) {
-    const r = JSON.parse(obj);
-    const date = String(r.date).slice(0, 10);
-    if (new Date(`${date}T00:00:00Z`).getUTCDay() !== 0)
-      throw new Error(`row date ${date} is not a Sunday: weekly-aggregate assumption broke`);
-    const weekStart = addDays(date, -6);
-    const k = `${weekStart}|${r.model_permaslug}`;
-    const s = sums.get(k) ?? { weekStart, model: r.model_permaslug, prompt: 0, completion: 0 };
-    s.prompt += r.total_prompt_tokens;
-    s.completion += r.total_completion_tokens;
+  for (const r of json.data) {
+    const model = r.model_permaslug.split(":")[0]!;
+    const k = `${r.date}|${model}`;
+    const s = sums.get(k) ?? { weekStart: r.date, model, tokens: 0 };
+    s.tokens += Number(BigInt(r.total_tokens)); // ponytail: Number is exact below 2^53 (~9e15); weekly totals are ~1e14
     sums.set(k, s);
   }
-  if (!sums.size) throw new Error("no weekly rows extracted");
-  return [...sums.values()];
+  if (!sums.size) throw new Error("dataset has no rows");
+  return { rows: [...sums.values()], asOf: json.meta.as_of };
 }
 
-export async function fetchRankingsHtml(): Promise<string> {
-  const res = await fetch(RANKINGS_URL, { headers: { "user-agent": "or-futures-takehome" } });
-  if (!res.ok) throw new Error(`GET ${RANKINGS_URL} -> ${res.status}`);
-  return res.text();
+/** One request per snapshot (rate limit 30/min, 500/day). Needs OPENROUTER_API_KEY; never logged. */
+export async function fetchDataset(weeks = 12): Promise<Dataset> {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) throw new Error("OPENROUTER_API_KEY not set (put it in .env)");
+  const today = new Date();
+  const start = addDays(weekStart(today), -7 * weeks);
+  const end = today.toISOString().slice(0, 10);
+  const res = await fetch(`${API_URL}?period=week&start_date=${start}&end_date=${end}`, {
+    headers: { authorization: `Bearer ${key}` },
+  });
+  if (!res.ok) throw new Error(`GET ${API_URL} -> ${res.status}`);
+  return parseDataset((await res.json()) as ApiResponse);
 }
 
 /** Stores rows under a new snapshot; later snapshots overwrite earlier (week, model) rows. */
-export function storeSnapshot(rows: WeeklyUsage[], source: string): { snapshotId: number; from: string; to: string } {
+export function storeSnapshot(ds: Dataset, source: string): { snapshotId: number; from: string; to: string } {
   const db = getDb();
   return tx(() => {
     const { lastInsertRowid } = db
-      .prepare("INSERT INTO snapshots (fetched_at, source) VALUES (?, ?)")
-      .run(new Date().toISOString(), source);
+      .prepare("INSERT INTO snapshots (fetched_at, source, as_of) VALUES (?, ?, ?)")
+      .run(new Date().toISOString(), source, ds.asOf);
     const snapshotId = Number(lastInsertRowid);
     const up = db.prepare(
-      `INSERT INTO weekly_usage (week_start, model_permaslug, prompt_tokens, completion_tokens, snapshot_id)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO weekly_usage (week_start, model_permaslug, total_tokens, snapshot_id) VALUES (?, ?, ?, ?)
        ON CONFLICT (week_start, model_permaslug) DO UPDATE SET
-         prompt_tokens = excluded.prompt_tokens, completion_tokens = excluded.completion_tokens,
-         snapshot_id = excluded.snapshot_id`,
+         total_tokens = excluded.total_tokens, snapshot_id = excluded.snapshot_id`,
     );
-    for (const r of rows) up.run(r.weekStart, r.model, r.prompt, r.completion, snapshotId);
-    const dates = rows.map((r) => r.weekStart).sort();
-    return { snapshotId, from: dates[0]!, to: dates.at(-1)! };
+    for (const r of ds.rows) up.run(r.weekStart, r.model, r.tokens, snapshotId);
+    const weeks = ds.rows.map((r) => r.weekStart).sort();
+    return { snapshotId, from: weeks[0]!, to: weeks.at(-1)! };
   });
+}
+
+/** Latest snapshot's as_of (ISO), for the required citation footer; null before any snapshot. */
+export function latestAsOf(): string | null {
+  const r = getDb().prepare("SELECT as_of FROM snapshots ORDER BY id DESC LIMIT 1").get();
+  return r ? String(r.as_of) : null;
 }

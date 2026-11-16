@@ -6,10 +6,10 @@ const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS snapshots (
-  id INTEGER PRIMARY KEY, fetched_at TEXT NOT NULL, source TEXT NOT NULL);
+  id INTEGER PRIMARY KEY, fetched_at TEXT NOT NULL, source TEXT NOT NULL, as_of TEXT);
 CREATE TABLE IF NOT EXISTS weekly_usage (
   week_start TEXT NOT NULL, model_permaslug TEXT NOT NULL,
-  prompt_tokens INTEGER NOT NULL, completion_tokens INTEGER NOT NULL,
+  total_tokens INTEGER NOT NULL,
   snapshot_id INTEGER NOT NULL REFERENCES snapshots(id),
   PRIMARY KEY (week_start, model_permaslug));
 CREATE TABLE IF NOT EXISTS markets (
@@ -47,7 +47,11 @@ export function getDb(): DatabaseSync {
   db = new DatabaseSync(path);
   openedPath = path;
   db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
+  // Upgrade pre-API DBs: weekly_usage was derived data (prompt/completion split), safe to rebuild via snapshot.
+  const cols = (t: string) => db!.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
+  if (cols("weekly_usage").includes("prompt_tokens")) db.exec("DROP TABLE weekly_usage");
   db.exec(SCHEMA);
+  if (!cols("snapshots").includes("as_of")) db.exec("ALTER TABLE snapshots ADD COLUMN as_of TEXT");
   return db;
 }
 

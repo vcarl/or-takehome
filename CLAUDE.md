@@ -14,11 +14,12 @@ Time-boxed take-home (devrel/community role). MVP first; real auth is a stretch.
 
 ## Data source
 
-- No documented rankings API. The public page `https://openrouter.ai/rankings` embeds TanStack Query dehydrated state, queryKey `["rankings","models",{"view":"week"}]`, containing per-model **weekly** rows: `{date, model_permaslug, variant, total_prompt_tokens, total_completion_tokens, ...}`.
-- **Rows are weekly aggregates labelled by the week's last day (a Sunday).** `date` 2026-11-15 = Mon 2026-11-09 .. Sun 2026-11-15 (so `week_start = date - 6 days`). Inferred from magnitude (~167T tokens across 20 rows is implausible for one day) and the capture time (Mon 2026-11-16 16:02 UTC; 2026-11-15 was the prior Sunday). Extraction errors loudly if a label is not a Sunday. Confirm by re-snapshotting on a later Monday: a new Sunday-labelled week should appear.
-- `snapshot` fetches only that public page, extracts the rows, stores them in `weekly_usage` (latest snapshot wins per week+model). Do not probe undocumented `api/frontend/*` endpoints.
-- `fixtures/rankings-*.html` is a committed capture so demos/tests run offline. It holds one week (2026-11-09), so `seed-demo` synthesizes earlier weeks from it (source `demo-synthetic`).
-- Weekly total per model = prompt+completion tokens, variants summed per `model_permaslug`. A week is resolvable once `weekly_usage` has rows for it. `openWeek(W)` builds markets from the most recent available prior week.
+- Official dataset API: `GET https://openrouter.ai/api/v1/datasets/rankings-daily?period=week&start_date=…&end_date=…` with `Authorization: Bearer $OPENROUTER_API_KEY` (key in gitignored `.env`, loaded by the CLI only, never printed/committed/fixtured). Limits: 30/min, 500/day, so one request per `./dev snapshot` (default window: last 12 weeks).
+- Response `{data:[{date, model_permaslug, total_tokens:"<decimal string>"}], meta:{as_of, start_date, end_date, version}}`. `period=week` buckets by ISO week start, so `date` IS `week_start`. Up to 50 models per bucket plus a reserved `other` long-tail row (stored, excluded from markets/options). `:variant` suffixes are stripped and summed into the base permaslug. There is no prompt/completion split.
+- Stored in `weekly_usage(week_start, model_permaslug, total_tokens, snapshot_id)` (latest snapshot wins per week+model); `snapshots.as_of` is kept per fetch.
+- **Partial-week rule:** the trailing bucket is the in-progress week. A week is resolvable only when `week_start + 7d <= date(as_of) + 1d`. `openWeek(W)` builds from the most recent complete prior week.
+- **License CC BY 4.0.** Show the citation `Source: OpenRouter (openrouter.ai/rankings), as of {as_of}.` (app footer, from `latestAsOf()`).
+- `fixtures/rankings-weekly.json` is one recorded live response (no key) so tests/`seed-demo` run offline: `./dev snapshot --fixture fixtures/rankings-weekly.json`. `seed-demo` uses only real data, with the fixture's `as_of` as the demo clock.
 
 ## Stack (deliberate deviation from the house blessed stack)
 
