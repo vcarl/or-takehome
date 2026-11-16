@@ -201,12 +201,13 @@ const signed = (x: number) => `${x > 0 ? "+" : ""}${x.toFixed(0)}%`;
 /** In-card growth prediction: one slider for the median; the 80% range defaults to the house range around it. */
 function GrowthForm({ marketId, house, mine, median, betCount, karma }: { marketId: number; house: House; mine: { pct: number; stake: number } | null; median: number | null; betCount: number; karma: number | null }) {
   const fetcher = useFetcher<typeof action>();
-  const [pct, setPct] = useState(0);
+  const [pct, setPct] = useState("0"); // string so "-" and "" are typeable; the number input is the submitted value
   if (mine)
     return (
-      <p className="muted">
-        You: <strong>{signed(mine.pct)}</strong> ({mine.stake} karma){median !== null && <> · Crowd {signed(median)} · {betCount} {betCount === 1 ? "prediction" : "predictions"}</>}
-      </p>
+      <div className="growth-result">
+        <span>You: <strong>{signed(mine.pct)}</strong> <span className="muted">({mine.stake} karma)</span></span>
+        {median !== null && <span>Crowd: <strong>{signed(median)}</strong> <span className="muted">({betCount} {betCount === 1 ? "prediction" : "predictions"})</span></span>}
+      </div>
     );
   if (karma === null) return <Link className="btn" to="/login">Log in to predict</Link>;
   const res = fetcher.data;
@@ -214,10 +215,16 @@ function GrowthForm({ marketId, house, mine, median, betCount, karma }: { market
     <fetcher.Form method="post" className="growth-form">
       <input type="hidden" name="market" value={marketId} />
       <label className="growth-slider">
-        <span>Next week <output className="stat">{signed(pct)}</output></span>
-        <input type="range" name="pct" min={-50} max={50} step={1} value={pct} onChange={(e) => setPct(Number(e.target.value))} />
+        <input type="range" min={-50} max={50} step={1} value={Math.max(-50, Math.min(50, Number(pct) || 0))} onChange={(e) => setPct(e.target.value)} aria-hidden tabIndex={-1} />
+        <span className="growth-readout">
+          <span>Next week</span>
+          <span className="growth-pct stat">
+            <input name="pct" type="number" min={-100} step={1} value={pct} onChange={(e) => setPct(e.target.value)} required aria-label="Predicted week-over-week change, %" />%
+          </span>
+          <span className="muted">House: +0% (80% range {signed(house.low)} to {signed(house.high)})</span>
+          <span className="muted">{betCount} {betCount === 1 ? "prediction" : "predictions"}</span>
+        </span>
       </label>
-      <span className="muted">House: +0% (80% range {signed(house.low)} to {signed(house.high)}) · {betCount} {betCount === 1 ? "prediction" : "predictions"}</span>
       <div className="growth-submit">
         <label>Stake <input name="stake" type="number" min="1" max="100" step="1" defaultValue={10} required /></label>
         <button className="btn" type="submit" disabled={fetcher.state !== "idle"}>Predict</button>
@@ -237,8 +244,13 @@ function Spark({ values, name, scale: { lo, hi, span } }: { values: number[]; na
   const off = span - values.length;
   const pts = values.map((v, i) => `${(((off + i) / (span - 1)) * 116 + 2).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
   return (
-    <svg className="spark" viewBox="0 0 120 32" role="img" aria-label={`${name} weekly tokens: ${compact(values[0]!)} to ${compact(values.at(-1)!)} over ${values.length} weeks`}>
+    <svg className="spark" viewBox="0 0 120 36" role="img" aria-label={`${name} weekly tokens: ${compact(values[0]!)} to ${compact(values.at(-1)!)} over ${values.length} weeks`}>
       <polyline points={pts} />
+      {/* One tick per week on the shared axis. */}
+      {Array.from({ length: span }, (_, i) => {
+        const x = ((i / (span - 1)) * 116 + 2).toFixed(1);
+        return <line key={i} className="tick" x1={x} x2={x} y1={33} y2={36} />;
+      })}
     </svg>
   );
 }
@@ -248,20 +260,27 @@ export default function Home({ loaderData: { week, closes, cards, settled, scale
     <>
       <h1>{week ? `Week of ${dm(week)}` : "No open week"}</h1>
       <p className="muted">{week ? `Closes in ${closes}` : "No market is currently open for betting."}</p>
+      {cards.map((c) => c.kind === "slate" && (
+        <SlateHero key={c.m.id} marketId={c.m.id} options={c.options} betCount={c.betCount} karma={user?.karma ?? null} result={actionData} />
+      ))}
+      {cards.some((c) => c.kind === "growth") && (
+        <>
+          <h2>Growth predictions</h2>
+          <p className="muted">Each card shows a model's total tokens last week, its change from the week before, and its weekly history (one tick per week); predict how much it moves next week.</p>
+        </>
+      )}
       <div className="grid">
         {cards.map((c) =>
-          c.kind === "slate" ? (
-            <SlateHero key={c.m.id} marketId={c.m.id} options={c.options} betCount={c.betCount} karma={user?.karma ?? null} result={actionData} />
-          ) : (
+          c.kind === "slate" ? null : (
             <section key={c.m.id} className="card">
               <h2 title={c.m.model_permaslug!}><Link to={`/markets/${c.m.id}`}>{c.name}</Link></h2>
-              <Spark values={c.series} name={c.name} scale={scale} />
-              <span>
-                <span className="stat">{c.last === null ? "--" : compact(c.last)}</span>{" "}
+              <div className="card-stats">
+                <span className="stat">{c.last === null ? "--" : compact(c.last)}</span>
                 {c.wow !== null && (
                   <span className={c.wow >= 0 ? "up" : "down"}>{c.wow >= 0 ? "▲" : "▼"} {Math.abs(c.wow).toFixed(1)}%</span>
                 )}
-              </span>
+                <Spark values={c.series} name={c.name} scale={scale} />
+              </div>
               <GrowthForm marketId={c.m.id} house={c.house} mine={c.mine} median={c.median} betCount={c.betCount} karma={user?.karma ?? null} />
             </section>
           ),
