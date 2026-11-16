@@ -68,8 +68,8 @@ footer div { border-top: 1px solid var(--border); padding-top: var(--space); col
 @media (max-width: 600px) { .slate { grid-template-columns: 1fr; } }
 .hero-submit { display: flex; gap: var(--space); align-items: center; flex-wrap: wrap; }
 .hero-submit input { width: 6rem; }
-.why summary { cursor: pointer; list-style: none; font-variant-numeric: tabular-nums; }
-.why summary::-webkit-details-marker { display: none; }
-.why .info { color: var(--muted); font-size: .85em; }
-.why[open] .info { color: var(--accent); }
-.why > span { display: block; font-size: .85em; }
+.tip-cell { width: 1.5rem; text-align: right; }
+.tip { position: relative; cursor: help; color: var(--muted); }
+.tip:hover, .tip:focus-visible { color: var(--accent); outline: none; }
+.tip-body { display: none; position: absolute; right: 0; bottom: calc(100% + .35rem); white-space: nowrap; padding: .3rem .55rem; border-radius: var(--radius); background: var(--fg); color: var(--bg); font-size: .82em; z-index: 1; }
+.tip:hover .tip-body, .tip:focus-visible .tip-body { display: block; }
