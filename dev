@@ -5,7 +5,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 [ -d node_modules ] || pnpm install
 case "${1:-serve}" in
   serve) node scripts/cli.ts migrate && exec pnpm exec react-router dev ;;
-  test) exec pnpm exec vitest run ;;
+  test) exec pnpm test ;;
   snapshot | open-week | resolve | seed-demo) exec node scripts/cli.ts "$@" ;;
   *) echo "usage: ./dev [snapshot [--fixture path] | open-week [date] | resolve | seed-demo | test]" >&2; exit 2 ;;
 esac
