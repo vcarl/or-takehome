@@ -43,7 +43,7 @@ footer div { border-top: 1px solid var(--border); padding-top: var(--space); col
 .settled li { padding: .3rem 0; border-bottom: 1px solid var(--border); }
 .grid .hero { grid-column: 1 / -1; }
 .grid .hero h2 { font-size: 1.4rem; }
-.slate { display: grid; grid-template-columns: minmax(11rem, 15rem) 1fr; gap: var(--space); align-items: start; }
+.slate { display: grid; grid-template-columns: minmax(13rem, 19rem) 1fr; gap: var(--space); align-items: start; }
 .slate ol { list-style: none; margin: 0; padding: 0; display: grid; gap: .35rem; }
 .slot, .pick { font: inherit; color: inherit; cursor: pointer; width: 100%; text-align: left; border-radius: var(--radius); }
 .slot:focus-visible, .pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -75,5 +75,5 @@ footer div { border-top: 1px solid var(--border); padding-top: var(--space); col
 .tip:hover .tip-body, .tip:focus-visible .tip-body { display: block; }
 .slots li[draggable=true] .slot { cursor: grab; }
 .slots li.drop-target .slot { border-style: solid; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.grip { width: .7em; color: var(--muted); line-height: 1; }
-.slots li[draggable=true] .slot:hover .grip { color: var(--accent); }
+.grip { flex: none; width: .8em; align-self: center; color: var(--muted); line-height: 1; cursor: grab; }
+.slots li[draggable=true]:hover .grip { color: var(--accent); }
