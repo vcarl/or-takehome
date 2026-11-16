@@ -45,14 +45,15 @@ export function openWeek(week: string): number {
   const ins = db.prepare(
     "INSERT OR IGNORE INTO markets (week_start, kind, model_permaslug, options_json, house_json) VALUES (?, ?, ?, ?, ?)",
   );
-  // House growth range: pooled week-over-week growth of the top-8 models over the 12 complete weeks up to src.
+  // House growth range: pooled week-over-week growth of each week's then-top-8 over the 12 complete weeks up to src
+  // (as in the backtest; using today's top 8 would pull in their launch weeks and blow the range out).
   const top8 = topN(prior, 8).filter(([, t]) => t > 0);
   const covered = weeks.filter(isCovered).slice(0, 12); // ponytail: totals re-read per week; fine at 12 weeks
   const growths: number[] = [];
   for (const w of covered) {
     const cur = totalsFor(w);
     const prev = totalsFor(addDays(w, -7));
-    for (const [m] of top8) {
+    for (const [m] of topN(prev, 8)) {
       const g = growthPct(prev.get(m) ?? 0, cur.get(m) ?? 0);
       if (g !== null) growths.push(g);
     }
