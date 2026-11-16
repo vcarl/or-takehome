@@ -57,9 +57,10 @@ export async function loader({ request }: Route.LoaderArgs) {
   });
   const settled = [...new Set(all.filter((m) => m.status === "resolved").map((m) => m.week_start))].map((w) => {
     const ms = all.filter((m) => m.week_start === w && m.status === "resolved");
-    const slate = ms.find((m) => m.kind === "top5")?.resolved_value;
+    const t5 = ms.find((m) => m.kind === "top5");
+    const slate = t5?.resolved_value;
     const top: string | null = slate ? JSON.parse(slate)[0] ?? null : null;
-    return { week: w, top: top && displayName(top, [], names), topSlug: top };
+    return { week: w, id: t5?.id ?? null, top: top && displayName(top, [], names), topSlug: top };
   });
   // One shared log-scale y-axis and week axis so sparklines compare across models.
   const all_ = cards.flatMap((c) => (c.kind === "growth" ? c.series.filter((v) => v > 0) : []));
@@ -208,13 +209,12 @@ export default function Home({ loaderData: { week, closes, cards, settled, scale
         <ul className="settled">
           {settled.map((s) => (
             <li key={s.week}>
-              <Link to={`/markets#${s.week}`}>Week of {dm(s.week)}</Link>{" "}
+              {s.id ? <Link to={`/markets/${s.id}`}>Week of {dm(s.week)}</Link> : `Week of ${dm(s.week)}`}{" "}
               <span className="muted">· #1 <span title={s.topSlug ?? undefined}>{s.top ?? "n/a"}</span></span>
             </li>
           ))}
         </ul>
       )}
-      <p><Link to="/markets">All markets &rarr;</Link></p>
     </>
   );
 }

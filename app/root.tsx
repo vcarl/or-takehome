@@ -36,7 +36,6 @@ export default function App() {
       <header>
         <Link to="/" className="brand">OR Futures</Link>
         <nav>
-          <NavLink to="/markets">Markets</NavLink>
           <NavLink to="/me">My bets</NavLink>
           <NavLink to="/leaderboard">Leaderboard</NavLink>
         </nav>
@@ -61,7 +60,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     <main>
       <h1>Something went wrong</h1>
       <p className="error">{msg}</p>
-      <Link to="/markets">Back to markets</Link>
+      <Link to="/">Back home</Link>
     </main>
   );
 }
