@@ -31,5 +31,3 @@ export function growthMultiplier(predictedPct: number, actualPct: number): numbe
   return 3 * Math.max(0, 1 - Math.abs(predictedPct - actualPct) / 25);
 }
 
-export const winnings = (stake: number, multiplier: number): number => stake * multiplier;
-

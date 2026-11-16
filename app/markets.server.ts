@@ -33,7 +33,7 @@ function weekRows(week: string): WeeklyRow[] {
     .all(week) as unknown as WeeklyRow[];
 }
 
-export function totalsFor(week: string) {
+function totalsFor(week: string) {
   // "other" is the API's aggregate long-tail row, not a model.
   return weeklyTotals(weekRows(week).filter((r) => r.model !== "other"), week);
 }
@@ -113,8 +113,7 @@ export function winningsTotal(userId: number): number {
 }
 
 /**
- * Stake karma on a market. `now` is injectable so the demo seed can place bets "in the past" (before the
- * week started) without bypassing validation; the app always uses the real clock.
+ * Stake karma on a market. `now` is injectable for tests (bets must land before the week starts).
  */
 export function placeBet(
   userId: number,

@@ -13,8 +13,6 @@ export function addDays(date: string, n: number): string {
   return new Date(Date.parse(`${date}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 }
 
-export const weekDays = (week: string): string[] => Array.from({ length: 7 }, (_, i) => addDays(week, i));
-
 /** ISO week key like "2026-W47" (lazy weekly grant dedupe). */
 export function isoWeekKey(date: string | Date): string {
   const thursday = addDays(weekStart(date), 3);

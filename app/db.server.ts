@@ -34,9 +34,7 @@ CREATE TABLE IF NOT EXISTS winnings_ledger (
   bet_id INTEGER NOT NULL UNIQUE REFERENCES bets(id), created_at TEXT NOT NULL);
 `;
 
-export function dbPath(): string {
-  return resolve(process.env.DATABASE_PATH ?? resolve(import.meta.dirname, "../data/app.sqlite3"));
-}
+const dbPath = () => resolve(process.env.DATABASE_PATH ?? resolve(import.meta.dirname, "../data/app.sqlite3"));
 
 let db: DatabaseSync | undefined;
 let openedPath: string | undefined;
@@ -49,11 +47,7 @@ export function getDb(): DatabaseSync {
   db = new DatabaseSync(path);
   openedPath = path;
   db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
-  // Upgrade pre-API DBs: weekly_usage was derived data (prompt/completion split), safe to rebuild via snapshot.
-  const cols = (t: string) => db!.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
-  if (cols("weekly_usage").includes("prompt_tokens")) db.exec("DROP TABLE weekly_usage");
   db.exec(SCHEMA);
-  if (!cols("snapshots").includes("as_of")) db.exec("ALTER TABLE snapshots ADD COLUMN as_of TEXT");
   return db;
 }
 

@@ -5,7 +5,7 @@ import { addDays, weekStart } from "./domain/week.ts";
  * Official dataset API (CC BY 4.0). period=week buckets by ISO week start (Monday), so `date` is the week_start.
  * Cite as: "Source: OpenRouter (openrouter.ai/rankings), as of {as_of}." (see latestAsOf()).
  */
-export const API_URL = "https://openrouter.ai/api/v1/datasets/rankings-daily";
+const API_URL = "https://openrouter.ai/api/v1/datasets/rankings-daily";
 
 export interface WeeklyUsage {
   weekStart: string; // Monday YYYY-MM-DD
