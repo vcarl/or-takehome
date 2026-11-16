@@ -4,7 +4,13 @@ A prediction game on OpenRouter's public weekly token-usage rankings. Each week,
 
 ## Run it
 
-Requires Node >= 24 (uses built-in `node:sqlite`) and pnpm. `./dev` runs `pnpm install` on first use.
+Requires Node >= 24 (uses built-in `node:sqlite`) and pnpm. `./dev` runs `pnpm install` on first use. Quickstart, no API key needed:
+
+```
+./dev seed-demo --players && ./dev
+```
+
+Then open http://localhost:5173 and log in with any username. The recorded rankings are shifted forward to the current week, so there is always an open week to predict on (the footer's "as of" date shifts with them). To start over, delete `data/`.
 
 ```
 ./dev seed-demo   # fresh DB from the recorded fixture (offline, real data, no API key)
@@ -24,12 +30,12 @@ A week runs Monday 00:00 UTC to the next Monday. Markets for week W are built fr
 - **Skill** is how much better you did than the free "same as last week" forecast. Growth: (house interval-score loss minus yours) / 15. Slate: 0.6 x (your points minus house points). Clamped to -1..+2.
 - **Winnings** = stake x max(0, 0.9 + skill). Copying the free forecast returns 0.9x, so it loses a little and farming doesn't pay. A bigger stake means bigger winnings.
 - **Karma** is the stake currency: 1000 to start, +100 each week, burned when staked (default stake 10, max 100).
-- **Leaderboard** = sum of skill / sqrt(predictions + 9). Skill first, engagement second: a lucky newcomer can't leapfrog a consistent forecaster.
+- **Leaderboard** score = winnings x (1 + skill / 10), where skill = sum of skill / sqrt(predictions + 9). Winnings reward taking part; skill scales them up or down, so a copycat who plays every week trails a forecaster who calls changes, and an empty account sits at zero. Skill and winnings are in a tooltip on each row.
 - **Crowd forecast** (median growth and range; consensus top 5 by Borda count) is shown only after you've predicted, so nobody can copy it.
 
 Worked example: you stake 10 on a growth market and beat the "same as last week" forecast by a skill of +0.5. Winnings = 10 x (0.9 + 0.5) = 14. If you did worse by 0.9 or more, you get 0. If you simply copied last week, you get 9.
 
-Evidence: 1000 simulated 26-week seasons resampled from the real data (stake 10). Copying last week or predicting zero growth returns 0.90x; random guessing about 0.68x; skilled forecasters return between about 0.82x and 1.64x depending on skill level. The leaderboard order matches true skill (Spearman 0.98 at weeks 4 to 26). Crowd median growth error was 6.28 pp against 29.60 pp for "same as last week". Full tables: `scratchpad/backtest/results-v2-stake10-d15.md` (not in this repo).
+Evidence: 1000 simulated 26-week seasons resampled from the real data (stake 10). Copying last week or predicting zero growth returns 0.90x; random guessing about 0.68x; skilled forecasters return between about 0.82x and 1.64x depending on skill level. The leaderboard order matches true skill (Spearman 0.98 at weeks 4 to 26). Crowd median growth error was 6.28 pp against 29.60 pp for "same as last week". (The simulator and full tables were kept out of this repo.)
 
 ## Data source
 
@@ -45,4 +51,4 @@ Licensed CC BY 4.0. Citation shown in the app footer: `Source: OpenRouter (openr
 
 ## What's next: benchmark events
 
-Scheduled LLM benchmark events, where people predict a model's result on a task before it runs (design in `mechanism.md` section 4). Carries over unchanged: skill as reference loss minus your loss, the 0.9 intercept, the skill leaderboard (sum of skill divided by the square root of predictions plus 9), and hiding the crowd until you predict. What changes: there is no persistence baseline, so the house forecast is a prior registered at event creation (50% or a base rate for yes/no; previous best plus past release jumps for numeric), and entry requires a probability or range. Employees and lab insiders need a declared affiliation and are scored separately from the public crowd. Events a single lab can steer are exhibition only. Undeclared insiders and sybils can't be excluded on free accounts, so real identity is a precondition for events to carry skill.
+Scheduled LLM benchmark events, where people predict a model's result on a task before it runs (design in `mechanism.md` section 4). Carries over unchanged: skill as reference loss minus your loss, the 0.9 intercept, the skill score (sum of skill divided by the square root of predictions plus 9), and hiding the crowd until you predict. What changes: there is no persistence baseline, so the house forecast is a prior registered at event creation (50% or a base rate for yes/no; previous best plus past release jumps for numeric), and entry requires a probability or range. Employees and lab insiders need a declared affiliation and are scored separately from the public crowd. Events a single lab can steer are exhibition only. Undeclared insiders and sybils can't be excluded on free accounts, so real identity is a precondition for events to carry skill.
