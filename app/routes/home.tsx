@@ -104,6 +104,18 @@ function SlateHero({ marketId, options, betCount, karma, result }: { marketId: n
       return next;
     });
   const clear = (i: number) => setSlots((cur) => cur.map((s, j) => (j === i ? null : s)));
+  // Drag a filled slot onto another slot to swap them (with their confidence chips). Mouse only; tap-to-clear still works everywhere.
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+  const swap = <T,>(xs: T[], a: number, b: number) => xs.map((x, j) => (j === a ? xs[b]! : j === b ? xs[a]! : x));
+  const drop = (to: number) => {
+    if (dragFrom !== null && dragFrom !== to) {
+      setSlots((cur) => swap(cur, dragFrom, to));
+      setConf((cur) => swap(cur, dragFrom, to));
+    }
+    setDragFrom(null);
+    setDragOver(null);
+  };
   const left = slots.filter((s) => !s).length;
   return (
     <section className="card hero">
@@ -113,10 +125,19 @@ function SlateHero({ marketId, options, betCount, karma, result }: { marketId: n
         <input type="hidden" name="market" value={marketId} />
         <ol className="slots" aria-label="Your top 5">
           {slots.map((s, i) => (
-            <li key={i}>
+            <li
+              key={i}
+              className={dragOver === i && dragFrom !== i ? "drop-target" : undefined}
+              draggable={!!s}
+              onDragStart={(e) => { setDragFrom(i); e.dataTransfer.effectAllowed = "move"; }}
+              onDragOver={(e) => { if (dragFrom !== null) { e.preventDefault(); setDragOver(i); } }}
+              onDragLeave={() => setDragOver((o) => (o === i ? null : o))}
+              onDrop={(e) => { e.preventDefault(); drop(i); }}
+              onDragEnd={() => { setDragFrom(null); setDragOver(null); }}
+            >
               <input type="hidden" name={`slot${i + 1}`} value={s ?? ""} />
               <input type="hidden" name={`conf${i + 1}`} value={conf[i]} />
-              <button type="button" className={`slot${s ? " filled" : ""}`} onClick={() => s && clear(i)} aria-label={s ? `Slot ${i + 1}: ${byslug.get(s)?.name}. Tap to clear` : `Slot ${i + 1}, empty`}>
+              <button type="button" className={`slot${s ? " filled" : ""}`} onClick={() => s && clear(i)} aria-label={s ? `Slot ${i + 1}: ${byslug.get(s)?.name}. Tap to clear, or drag to reorder` : `Slot ${i + 1}, empty`}>
                 <span className="slot-n">#{i + 1}</span>
                 <span className="slot-name">{s ? byslug.get(s)?.name : ""}</span>
               </button>
