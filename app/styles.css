@@ -75,8 +75,10 @@ footer div { border-top: 1px solid var(--border); padding-top: var(--space); col
 .tip:hover .tip-body, .tip:focus-visible .tip-body { display: block; }
 .slots li[draggable=true] .slot { cursor: grab; }
 .slots li.drop-target .slot { border-style: solid; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.grip { flex: none; width: .8em; align-self: center; color: var(--muted); line-height: 1; cursor: grab; }
-.slots li[draggable=true]:hover .grip { color: var(--accent); }
+.gutter { flex: none; width: 1.8rem; align-self: center; text-align: right; line-height: 1; }
+.gutter .grip { display: none; color: var(--accent); cursor: grab; font-size: 1.1em; }
+.slots li[draggable=true]:hover .gutter .slot-n { display: none; }
+.slots li[draggable=true]:hover .gutter .grip { display: inline; }
 .growth-form { display: flex; flex-direction: column; gap: .35rem; margin-top: auto; }
 .growth-slider { display: flex; align-items: center; gap: .75rem; }
 .growth-slider input[type="range"] { writing-mode: vertical-lr; direction: rtl; height: 7rem; margin: 0; accent-color: var(--accent); }
