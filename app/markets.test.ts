@@ -57,3 +57,23 @@ describe("markets flow", () => {
     expect(resolveReady()).toBe(0);
   });
 });
+
+describe("top5 market", () => {
+  it("resolves to the actual top 5 and pays the slate multiplier", () => {
+    const r = (weekStart: string, model: string, tokens: number) => ({ weekStart, model, tokens });
+    const ms = ["a", "b", "c", "d", "e", "f"];
+    const rows = (w: string, rev: boolean) => ms.map((m, i) => r(w, m, (rev ? i + 1 : 6 - i) * 100));
+    storeSnapshot({ asOf: "2027-01-20T00:00:00Z", rows: [...rows("2027-01-04", false), ...rows("2027-01-11", false)] }, "t5");
+    expect(openWeek("2027-01-11")).toBeGreaterThan(0);
+    const db = getDb();
+    const id = db.prepare("SELECT id FROM markets WHERE kind='top5' AND week_start='2027-01-11'").get()!.id as number;
+    const u = getOrCreateUser("slate", new Date("2027-01-01T00:00:00Z"));
+    const before = new Date("2027-01-02T00:00:00Z");
+    expect(() => placeBet(u, id, 10, ["a", "a", "b", "c", "d"], before)).toThrow(/distinct/);
+    expect(() => placeBet(u, id, 10, ["a", "b", "c", "d", "zz"], before)).toThrow(/option/);
+    placeBet(u, id, 100, ["b", "a", "c", "d", "f"], before); // 0.4 + 0.4 + 1 + 1 + 0 = 2.8 pts
+    resolveReady();
+    expect(db.prepare("SELECT resolved_value v FROM markets WHERE id=?").get(id)!.v).toBe(JSON.stringify(["a", "b", "c", "d", "e"]));
+    expect(winningsTotal(u)).toBeCloseTo(100 * 1.68); // 3 × 2.8 / 5
+  });
+});

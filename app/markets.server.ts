@@ -2,6 +2,7 @@ import { getDb, tx } from "./db.server.ts";
 import {
   growthMultiplier,
   growthPct,
+  slateMultiplier,
   topModelMultiplier,
   topN,
   weeklyTotals,
@@ -15,7 +16,7 @@ const WEEKLY_GRANT = 100;
 interface Market {
   id: number;
   week_start: string;
-  kind: "top_model" | "growth";
+  kind: "top_model" | "growth" | "top5";
   model_permaslug: string | null;
   options_json: string | null;
   status: "open" | "resolved";
@@ -67,7 +68,11 @@ export function openWeek(week: string): number {
   return tx(() => {
     let n = 0;
     const top10 = topN(prior, 10);
-    if (top10.length) n += num(ins.run(week, "top_model", null, JSON.stringify(top10.map(([m]) => m))).changes);
+    if (top10.length) {
+      const opts = JSON.stringify(top10.map(([m]) => m));
+      n += num(ins.run(week, "top_model", null, opts).changes);
+      if (top10.length >= 5) n += num(ins.run(week, "top5", null, opts).changes); // a slate needs 5 distinct options
+    }
     for (const [m, t] of topN(prior, 8)) if (t > 0) n += num(ins.run(week, "growth", m, null).changes);
     return n;
   });
@@ -119,7 +124,7 @@ export function placeBet(
   userId: number,
   marketId: number,
   stake: number,
-  choice: string | number,
+  choice: string | string[] | number,
   now = new Date(),
 ): number {
   const db = getDb();
@@ -136,6 +141,12 @@ export function placeBet(
       if (typeof choice !== "string" || !(JSON.parse(m.options_json!) as string[]).includes(choice))
         throw new Error("choice is not an option");
       text = choice;
+    } else if (m.kind === "top5") {
+      const slate = choice;
+      if (!Array.isArray(slate) || slate.length !== 5 || new Set(slate).size !== 5) throw new Error("pick 5 distinct models");
+      const opts = JSON.parse(m.options_json!) as string[];
+      if (!slate.every((s) => opts.includes(s))) throw new Error("choice is not an option");
+      text = JSON.stringify(slate);
     } else {
       if (typeof choice !== "number" || !Number.isFinite(choice)) throw new Error("prediction must be a number");
       pct = choice;
@@ -173,6 +184,10 @@ function resolveMarket(m: Market): void {
     const total = bets.reduce((s, b) => s + b.stake, 0);
     const onWinner = bets.filter((b) => b.choice_text === value).reduce((s, b) => s + b.stake, 0);
     mult = (b) => topModelMultiplier(total, onWinner, b.choice_text === value);
+  } else if (m.kind === "top5") {
+    const actual = topN(cur, 5).map(([s]) => s);
+    value = JSON.stringify(actual);
+    mult = (b) => slateMultiplier(JSON.parse(b.choice_text!), actual);
   } else {
     const actual = growthPct(totalsFor(addDays(m.week_start, -7)).get(m.model_permaslug!) ?? 0, cur.get(m.model_permaslug!) ?? 0);
     value = actual === null ? null : String(actual);

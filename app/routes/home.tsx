@@ -19,7 +19,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const usage = usageByModel();
   const names = modelNames();
-  const open = all.filter((m) => m.week_start === week);
+  const open = all.filter((m) => m.week_start === week && m.kind !== "top5");
   const slugs = open.flatMap((m) => (m.model_permaslug ? [m.model_permaslug] : []));
   const cards = open.map((m) => {
     const bets = marketBets(m.id);
