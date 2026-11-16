@@ -8,6 +8,7 @@ Requires Node >= 24 (uses built-in `node:sqlite`) and pnpm. `./dev` runs `pnpm i
 
 ```
 ./dev seed-demo   # fresh DB from the recorded fixture (offline, real data, no API key)
+./dev seed-demo --players   # same, plus scripted demo-* players so the skill leaderboard shows real results
 ./dev             # migrate and serve (React Router dev server)
 ./dev test        # typecheck + Vitest
 ./dev snapshot    # pull live rankings; needs OPENROUTER_API_KEY in .env (gitignored)
