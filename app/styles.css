@@ -75,3 +75,5 @@ footer div { border-top: 1px solid var(--border); padding-top: var(--space); col
 .tip:hover .tip-body, .tip:focus-visible .tip-body { display: block; }
 .slots li[draggable=true] .slot { cursor: grab; }
 .slots li.drop-target .slot { border-style: solid; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.grip { width: .7em; color: var(--muted); line-height: 1; }
+.slots li[draggable=true] .slot:hover .grip { color: var(--accent); }
