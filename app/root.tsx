@@ -1,4 +1,10 @@
-import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
+import { Form, isRouteErrorResponse, Link, Links, Meta, NavLink, Outlet, Scripts, ScrollRestoration, useLoaderData } from "react-router";
+import type { Route } from "./+types/root";
+import { getUser } from "./session.server.ts";
+import { fmt } from "./format.ts";
+import "./styles.css";
+
+export const loader = async ({ request }: Route.LoaderArgs) => ({ user: await getUser(request) });
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -6,6 +12,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>OR Futures</title>
         <Meta />
         <Links />
       </head>
@@ -19,5 +26,37 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return <Outlet />;
+  const { user } = useLoaderData<typeof loader>();
+  return (
+    <>
+      <header>
+        <Link to="/" className="brand">OR Futures</Link>
+        <nav>
+          <NavLink to="/" end>Markets</NavLink>
+          <NavLink to="/me">My bets</NavLink>
+          <NavLink to="/leaderboard">Leaderboard</NavLink>
+        </nav>
+        {user ? (
+          <span>
+            <strong>{user.username}</strong> · {fmt(user.karma)} karma · {fmt(user.winnings)} winnings{" "}
+            <Form method="post" action="/logout"><button className="link">Log out</button></Form>
+          </span>
+        ) : (
+          <Link to="/login">Log in</Link>
+        )}
+      </header>
+      <main><Outlet /></main>
+    </>
+  );
+}
+
+export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+  const msg = isRouteErrorResponse(error) ? `${error.status} ${error.statusText}` : error instanceof Error ? error.message : "Unknown error";
+  return (
+    <main>
+      <h1>Something went wrong</h1>
+      <p className="error">{msg}</p>
+      <Link to="/">Back to markets</Link>
+    </main>
+  );
 }
