@@ -1,3 +1,4 @@
+import { rankScore } from "./domain/payout.ts";
 import { getDb } from "./db.server.ts";
 import { median } from "./format.ts";
 
@@ -63,7 +64,7 @@ export const ledger = (userId: number) =>
 
 /** skill_score = sum(skill) / sqrt(n + 9) over resolved bets (n = resolved bet count). */
 export const leaderboard = () =>
-  rows<{ username: string; skill_score: number; winnings: number; predictions: number }>(
+  rows<{ username: string; skill_score: number; winnings: number; predictions: number; score: number }>(
     `SELECT u.username,
        COALESCE((SELECT SUM(skill) FROM bets WHERE user_id = u.id), 0) AS skill_sum,
        (SELECT COUNT(skill) FROM bets WHERE user_id = u.id) AS n,
@@ -71,8 +72,11 @@ export const leaderboard = () =>
        (SELECT COUNT(*) FROM bets WHERE user_id = u.id) AS predictions
      FROM users u`,
   )
-    .map((r: any) => ({ username: r.username, skill_score: r.skill_sum / Math.sqrt(r.n + 9), winnings: r.winnings, predictions: r.predictions }))
-    .sort((a, b) => b.skill_score - a.skill_score || b.winnings - a.winnings || a.username.localeCompare(b.username));
+    .map((r: any) => {
+      const skill_score = r.skill_sum / Math.sqrt(r.n + 9);
+      return { username: r.username, skill_score, winnings: r.winnings, predictions: r.predictions, score: rankScore(r.winnings, skill_score) };
+    })
+    .sort((a, b) => b.score - a.score || b.skill_score - a.skill_score || a.username.localeCompare(b.username));
 
 export type Crowd =
   | { kind: "growth"; median: number | null; low: number | null; high: number | null }

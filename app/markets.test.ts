@@ -1,3 +1,4 @@
+import { rankScore } from "./domain/payout.ts";
 import { beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { getDb } from "./db.server.ts";
@@ -100,9 +101,12 @@ describe("top5 market, ranges, leaderboard and crowd gating", () => {
     expect(Number(db.prepare("SELECT skill s FROM bets WHERE market_id=?").get(id)!.s)).toBeCloseTo(skill);
     expect(winningsTotal(u)).toBeCloseTo(100 * Math.max(0, 0.9 + skill) + 100 * (0.9 + (0.1 * 80) / 1.5 / 15)); // slate + growth (point forecast 0 hits 0%; house wis = 0.1*80/1.5)
   });
-  it("orders the leaderboard by skill score", () => {
+  it("orders the leaderboard by winnings scaled by skill", () => {
     const lb = leaderboard();
-    expect(lb.map((r) => r.username)).toEqual(lb.map((r) => r.username).slice().sort((a, b) => lb.find((r) => r.username === b)!.skill_score - lb.find((r) => r.username === a)!.skill_score || a.localeCompare(b)));
+    expect(lb.map((r) => r.score)).toEqual(lb.map((r) => r.score).slice().sort((a, b) => b - a));
+    expect(rankScore(100, 0)).toBe(100);
+    expect(rankScore(100, 5)).toBe(150);
+    expect(rankScore(100, -12)).toBe(0);
     expect(lb.find((r) => r.username === "viewer")).toMatchObject({ skill_score: 0, predictions: 0 });
   });
 });

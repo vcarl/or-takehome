@@ -56,3 +56,6 @@ export function houseRange(growths: number[]): House {
   const r5 = (x: number) => Math.round(x / 5) * 5;
   return { low: Math.min(0, r5(percentile(growths, 0.1))), high: Math.max(0, r5(percentile(growths, 0.9))) };
 }
+
+/** Leaderboard rank: winnings (engagement) scaled by skill quality. Skill +10 doubles it; skill −10 zeroes it. */
+export const rankScore = (winnings: number, skillScore: number) => winnings * Math.max(0, 1 + skillScore / 10);
