@@ -77,9 +77,14 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 type Opt = { slug: string; name: string; tokens: number };
+const CONF = ["lean", "likely", "lock"] as const;
+type Conf = (typeof CONF)[number];
+const CONF_LABEL: Record<Conf, string> = { lean: "Lean", likely: "Likely", lock: "Lock" };
 /** Tap-to-rank: tapping a model fills the next empty slot; tapping a filled slot (or the model again) clears it. */
 function SlateHero({ marketId, options, betCount, karma, result }: { marketId: number; options: Opt[]; betCount: number; karma: number | null; result?: { error: string } | { ok: string } }) {
   const [slots, setSlots] = useState<(string | null)[]>([null, null, null, null, null]);
+  const [conf, setConf] = useState<Conf[]>(["lean", "lean", "lean", "lean", "lean"]);
+  const cycle = (i: number) => setConf((cur) => cur.map((c, j) => (j === i ? CONF[(CONF.indexOf(c) + 1) % CONF.length]! : c)));
   const byslug = new Map(options.map((o) => [o.slug, o]));
   const toggle = (slug: string) =>
     setSlots((cur) => {
@@ -104,10 +109,16 @@ function SlateHero({ marketId, options, betCount, karma, result }: { marketId: n
           {slots.map((s, i) => (
             <li key={i}>
               <input type="hidden" name={`slot${i + 1}`} value={s ?? ""} />
+              <input type="hidden" name={`conf${i + 1}`} value={conf[i]} />
               <button type="button" className={`slot${s ? " filled" : ""}`} onClick={() => s && clear(i)} aria-label={s ? `Slot ${i + 1}: ${byslug.get(s)?.name}. Tap to clear` : `Slot ${i + 1}, empty`}>
                 <span className="slot-n">#{i + 1}</span>
                 <span className="slot-name">{s ? byslug.get(s)?.name : ""}</span>
               </button>
+              {s && (
+                <button type="button" className={`chip chip-${conf[i]}`} onClick={() => cycle(i)} aria-label={`Confidence for slot ${i + 1}: ${CONF_LABEL[conf[i]!]}. Tap to change`}>
+                  {CONF_LABEL[conf[i]!]}
+                </button>
+              )}
             </li>
           ))}
         </ol>
