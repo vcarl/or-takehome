@@ -5,7 +5,7 @@ import {
   topModelMultiplier,
   topN,
   weeklyTotals,
-  type DailyRow,
+  type WeeklyRow,
 } from "./domain/payout.ts";
 import { addDays, isoWeekKey } from "./domain/week.ts";
 
@@ -24,30 +24,31 @@ interface Market {
 
 const num = (v: unknown) => Number(v);
 
-function weekRows(week: string): DailyRow[] {
+function weekRows(week: string): WeeklyRow[] {
   return getDb()
     .prepare(
-      `SELECT date, model_permaslug AS model, prompt_tokens + completion_tokens AS tokens
-       FROM daily_usage WHERE date BETWEEN ? AND ?`,
+      `SELECT week_start AS week, model_permaslug AS model, prompt_tokens + completion_tokens AS tokens
+       FROM weekly_usage WHERE week_start = ?`,
     )
-    .all(week, addDays(week, 6)) as unknown as DailyRow[];
+    .all(week) as unknown as WeeklyRow[];
 }
 
 export function totalsFor(week: string) {
   return weeklyTotals(weekRows(week), week);
 }
 
-/** All 7 days of `week` have data. */
+/** `week` is resolvable: weekly_usage has rows for it (rows are whole-week aggregates). */
 export function isCovered(week: string): boolean {
-  const r = getDb()
-    .prepare("SELECT COUNT(DISTINCT date) AS n FROM daily_usage WHERE date BETWEEN ? AND ?")
-    .get(week, addDays(week, 6));
-  return num(r?.n) === 7;
+  return !!getDb().prepare("SELECT 1 FROM weekly_usage WHERE week_start = ? LIMIT 1").get(week);
 }
 
-/** Creates week's markets from the previous week's totals. Idempotent. Returns number of new markets. */
+/**
+ * Creates week's markets from the most recent available prior week's totals (week-7 normally; an earlier
+ * week if that one has no data yet, e.g. the demo opens 11-23 from 11-09). Idempotent. Returns new markets.
+ */
 export function openWeek(week: string): number {
-  const prior = totalsFor(addDays(week, -7));
+  const src = getDb().prepare("SELECT MAX(week_start) AS w FROM weekly_usage WHERE week_start < ?").get(week)?.w;
+  const prior = src ? totalsFor(String(src)) : new Map<string, number>();
   const db = getDb();
   const ins = db.prepare(
     "INSERT OR IGNORE INTO markets (week_start, kind, model_permaslug, options_json) VALUES (?, ?, ?, ?)",
@@ -56,7 +57,6 @@ export function openWeek(week: string): number {
     let n = 0;
     const top10 = topN(prior, 10);
     if (top10.length) n += num(ins.run(week, "top_model", null, JSON.stringify(top10.map(([m]) => m))).changes);
-    // ponytail: prior week may be partial (demo opens next week mid-week); only top-8 membership uses it.
     for (const [m, t] of topN(prior, 8)) if (t > 0) n += num(ins.run(week, "growth", m, null).changes);
     return n;
   });

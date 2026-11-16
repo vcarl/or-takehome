@@ -1,16 +1,13 @@
-import { weekDays } from "./week.ts";
-
-export interface DailyRow {
-  date: string;
+export interface WeeklyRow {
+  week: string; // Monday YYYY-MM-DD
   model: string;
   tokens: number;
 }
 
-/** Total tokens per model over the 7 days of `week`. */
-export function weeklyTotals(rows: DailyRow[], week: string): Map<string, number> {
-  const days = new Set(weekDays(week));
+/** Total tokens per model for `week` (sums duplicate rows, ignores other weeks). */
+export function weeklyTotals(rows: WeeklyRow[], week: string): Map<string, number> {
   const out = new Map<string, number>();
-  for (const r of rows) if (days.has(r.date)) out.set(r.model, (out.get(r.model) ?? 0) + r.tokens);
+  for (const r of rows) if (r.week === week) out.set(r.model, (out.get(r.model) ?? 0) + r.tokens);
   return out;
 }
 

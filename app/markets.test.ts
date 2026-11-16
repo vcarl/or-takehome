@@ -1,28 +1,27 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { getDb } from "./db.server.ts";
-import { extractDailyUsage, storeSnapshot } from "./rankings.server.ts";
+import { extractWeeklyUsage, storeSnapshot } from "./rankings.server.ts";
 import { ensureWeeklyGrant, getOrCreateUser, karmaBalance, openWeek, placeBet, resolveReady, winningsTotal } from "./markets.server.ts";
 
 process.env.DATABASE_PATH = ":memory:";
 
 describe("rankings extract", () => {
   it("parses the fixture", () => {
-    const rows = extractDailyUsage(readFileSync("fixtures/rankings-2026-11-16.html", "utf8"));
-    expect(new Set(rows.map((r) => r.date))).toEqual(new Set(["2026-11-15"]));
+    const rows = extractWeeklyUsage(readFileSync("fixtures/rankings-2026-11-16.html", "utf8"));
+    expect(new Set(rows.map((r) => r.weekStart))).toEqual(new Set(["2026-11-09"]));
     expect(rows).toHaveLength(20);
+  });
+  it("rejects non-Sunday labels", () => {
+    const html = readFileSync("fixtures/rankings-2026-11-16.html", "utf8").replaceAll("2026-11-15 00", "2026-11-14 00");
+    expect(() => extractWeeklyUsage(html)).toThrow(/Sunday/);
   });
 });
 
 describe("markets flow", () => {
-  const days = ["09", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22"];
   beforeAll(() => {
     getDb();
-    const rows = days.flatMap((d, i) => [
-      { date: `2026-11-${d}`, model: "a", prompt: 100, completion: 0 },
-      { date: `2026-11-${d}`, model: "b", prompt: 50 + (i >= 7 ? 100 : 0), completion: 0 }, // b overtakes in week 2
-    ]);
-    storeSnapshot(rows.filter((r) => r.date < "2026-11-22"), "t"); // last day missing: week 2 not covered
+    storeSnapshot([{ weekStart: "2026-11-09", model: "a", prompt: 100, completion: 0 }, { weekStart: "2026-11-09", model: "b", prompt: 50, completion: 0 }], "t");
   });
 
   it("opens idempotently, validates bets, resolves only covered weeks", () => {
@@ -40,7 +39,7 @@ describe("markets flow", () => {
     placeBet(u, top, 100, "b", before);
     expect(karmaBalance(u)).toBe(1000);
     expect(resolveReady()).toBe(0);
-    storeSnapshot([{ date: "2026-11-22", model: "a", prompt: 100, completion: 0 }, { date: "2026-11-22", model: "b", prompt: 150, completion: 0 }], "t2");
+    storeSnapshot([{ weekStart: "2026-11-16", model: "a", prompt: 100, completion: 0 }, { weekStart: "2026-11-16", model: "b", prompt: 150, completion: 0 }], "t2");
     expect(resolveReady()).toBe(3);
     expect(winningsTotal(u)).toBe(100); // sole bettor, picked winner: x1
     expect(resolveReady()).toBe(0);

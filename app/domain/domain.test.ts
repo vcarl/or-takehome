@@ -19,10 +19,9 @@ describe("payout", () => {
   it("sums week totals, ignoring other weeks", () => {
     const t = weeklyTotals(
       [
-        { date: "2026-11-09", model: "a", tokens: 5 },
-        { date: "2026-11-15", model: "a", tokens: 5 },
-        { date: "2026-11-16", model: "a", tokens: 100 },
-        { date: "2026-11-10", model: "b", tokens: 7 },
+        { week: "2026-11-09", model: "a", tokens: 10 },
+        { week: "2026-11-16", model: "a", tokens: 100 },
+        { week: "2026-11-09", model: "b", tokens: 7 },
       ],
       "2026-11-09",
     );

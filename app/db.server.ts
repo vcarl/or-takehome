@@ -7,11 +7,11 @@ CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS snapshots (
   id INTEGER PRIMARY KEY, fetched_at TEXT NOT NULL, source TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS daily_usage (
-  date TEXT NOT NULL, model_permaslug TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS weekly_usage (
+  week_start TEXT NOT NULL, model_permaslug TEXT NOT NULL,
   prompt_tokens INTEGER NOT NULL, completion_tokens INTEGER NOT NULL,
   snapshot_id INTEGER NOT NULL REFERENCES snapshots(id),
-  PRIMARY KEY (date, model_permaslug));
+  PRIMARY KEY (week_start, model_permaslug));
 CREATE TABLE IF NOT EXISTS markets (
   id INTEGER PRIMARY KEY, week_start TEXT NOT NULL,
   kind TEXT NOT NULL CHECK (kind IN ('top_model','growth')),

@@ -10,54 +10,53 @@ import {
   placeBet,
   resolveReady,
 } from "../app/markets.server.ts";
-import { extractDailyUsage, fetchRankingsHtml, storeSnapshot, type DailyUsage } from "../app/rankings.server.ts";
+import { extractWeeklyUsage, fetchRankingsHtml, storeSnapshot, type WeeklyUsage } from "../app/rankings.server.ts";
 
 const [cmd, ...args] = process.argv.slice(2);
 const db = getDb();
 
 async function takeSnapshot(fixture?: string) {
   const html = fixture ? readFileSync(resolve(fixture), "utf8") : await fetchRankingsHtml();
-  const rows = extractDailyUsage(html);
+  const rows = extractWeeklyUsage(html);
   const r = storeSnapshot(rows, fixture ? `fixture:${fixture}` : "live");
   console.log(`snapshot ${r.snapshotId}: ${rows.length} rows, ${r.from}..${r.to}`);
 }
 
-/** Demo only: the fixture covers a single day, so earlier days are synthesized (deterministically) from it. */
-function synthesize(real: DailyUsage[], from: string, to: string): DailyUsage[] {
-  const out: DailyUsage[] = [];
+/** Demo only: the fixture holds one real week, so earlier weeks are synthesized (deterministically) from it. */
+function synthesize(real: WeeklyUsage[], weeks: string[]): WeeklyUsage[] {
   const models = [...new Set(real.map((r) => r.model))].sort();
-  for (let d = from, di = 0; d <= to; d = addDays(d, 1), di++) {
-    models.forEach((m, i) => {
-      const base = real.find((r) => r.model === m)!;
-      const f = 1 + 0.25 * Math.sin(i * 1.7 + di * 0.9) + 0.015 * ((i % 5) - 2) * (di / 7);
-      out.push({ date: d, model: m, prompt: Math.round(base.prompt * f), completion: Math.round(base.completion * f) });
-    });
-  }
-  return out;
+  return weeks.flatMap((weekStart, wi) =>
+    models.map((model, i) => {
+      const base = real.find((r) => r.model === model)!;
+      const f = 1 + 0.25 * Math.sin(i * 1.7 + wi * 2.1) + 0.03 * ((i % 5) - 2) * (wi - 1);
+      return { weekStart, model, prompt: Math.round(base.prompt * f), completion: Math.round(base.completion * f) };
+    }),
+  );
 }
 
 function seedDemo(fixture: string) {
   if (db.prepare("SELECT 1 FROM markets LIMIT 1").get()) throw new Error("seed-demo needs a fresh DB (markets already exist); delete data/ first");
-  const real = extractDailyUsage(readFileSync(resolve(fixture), "utf8"));
-  const realDay = real[0]!.date;
-  const lastDay = addDays(realDay, 1); // synthetic "today" so the next week can open
-  const firstWeek = addDays(weekStart(realDay), -21);
-  storeSnapshot(synthesize(real, firstWeek, lastDay).filter((r) => r.date !== realDay), "demo-synthetic");
-  storeSnapshot(real, `fixture:${fixture}`); // real day written last, wins
-  const latestCovered = addDays(weekStart(realDay), 0); // week containing the real day is full via synthetic filler
+  const real = extractWeeklyUsage(readFileSync(resolve(fixture), "utf8"));
+  const realWeek = real[0]!.weekStart; // latest real week, resolvable
+  const w = (n: number) => addDays(realWeek, n * 7);
+  storeSnapshot(synthesize(real, [w(-3), w(-2), w(-1)]), "demo-synthetic");
+  storeSnapshot(real, `fixture:${fixture}`); // real week written last
+  // Demo "now" = the day after the real week ends. Week w(1) has started (locked, unresolved);
+  // w(2) is the open one, built from the most recent available prior week (the real one).
+  const demoNow = new Date(`${addDays(realWeek, 7)}T12:00:00Z`);
   const users = ["alice", "bob", "carol", "dave"];
-  const ids = users.map((u) => getOrCreateUser(u, new Date(`${addDays(firstWeek, 7)}T00:00:00Z`)));
+  const ids = users.map((u) => getOrCreateUser(u, new Date(`${w(-3)}T00:00:00Z`)));
   const marketsFor = (w: string) =>
     db.prepare("SELECT * FROM markets WHERE week_start = ? ORDER BY id").all(w) as unknown as {
       id: number; kind: string; options_json: string | null; model_permaslug: string | null;
     }[];
   let k = 0;
   // Weeks to bet on, each before it starts, using an injected clock instead of bypassing validation.
-  for (const w of [-14, -7, 0, 7, 14].map((n) => addDays(latestCovered, n))) {
-    openWeek(w);
-    const clock = new Date(Math.min(Date.parse(`${addDays(w, -1)}T12:00:00Z`), Date.parse(`${lastDay}T12:00:00Z`)));
+  for (const wk of [w(-2), w(-1), w(0), w(1), w(2)]) {
+    openWeek(wk);
+    const clock = new Date(Math.min(Date.parse(`${addDays(wk, -1)}T12:00:00Z`), demoNow.getTime()));
     for (const uid of ids) ensureWeeklyGrant(uid, clock);
-    for (const m of marketsFor(w)) {
+    for (const m of marketsFor(wk)) {
       ids.forEach((uid, ui) => {
         k++;
         if ((k + ui) % 3 === 0) return; // not everyone bets everywhere
@@ -74,7 +73,7 @@ function seedDemo(fixture: string) {
     }
     resolveReady();
   }
-  console.log(`seeded demo users: ${users.join(", ")}; resolved weeks <= ${latestCovered}; open week ${addDays(latestCovered, 14)}`);
+  console.log(`seeded demo users: ${users.join(", ")}; resolved weeks ${w(-2)}..${w(0)}; locked ${w(1)}; open ${w(2)}`);
 }
 
 switch (cmd) {
