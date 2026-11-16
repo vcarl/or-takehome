@@ -5,6 +5,8 @@ import { DatabaseSync } from "node:sqlite";
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS model_names (
+  permaslug TEXT PRIMARY KEY, name TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS snapshots (
   id INTEGER PRIMARY KEY, fetched_at TEXT NOT NULL, source TEXT NOT NULL, as_of TEXT);
 CREATE TABLE IF NOT EXISTS weekly_usage (

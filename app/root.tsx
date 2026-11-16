@@ -1,11 +1,14 @@
-import { Form, isRouteErrorResponse, Link, Links, Meta, NavLink, Outlet, Scripts, ScrollRestoration, useLoaderData } from "react-router";
+import { Form, isRouteErrorResponse, Link, Links, Meta, NavLink, Outlet, Scripts, ScrollRestoration, useLoaderData, useRouteLoaderData } from "react-router";
 import type { Route } from "./+types/root";
 import { getUser } from "./session.server.ts";
-import { latestAsOf } from "./rankings.server.ts";
-import { fmt } from "./format.ts";
+import { latestAsOf, modelNames } from "./rankings.server.ts";
+import { fmt, type Names } from "./format.ts";
 import "./styles.css";
 
-export const loader = async ({ request }: Route.LoaderArgs) => ({ user: await getUser(request), asOf: latestAsOf() });
+export const loader = async ({ request }: Route.LoaderArgs) => ({ user: await getUser(request), asOf: latestAsOf(), names: modelNames() });
+
+/** OpenRouter display names, loaded once by the root route. */
+export const useNames = (): Names => useRouteLoaderData<typeof loader>("root")?.names ?? {};
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (

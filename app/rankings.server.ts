@@ -68,6 +68,27 @@ export function storeSnapshot(ds: Dataset, source: string): { snapshotId: number
   });
 }
 
+/** /models: canonical_slug (= dataset permaslug) -> display name. Base entry only (ids without ":variant"); "Author: " prefix dropped. */
+export function parseModelNames(json: { data: { canonical_slug: string; id: string; name: string }[] }): [string, string][] {
+  return json.data.filter((m) => !m.id.includes(":")).map((m) => [m.canonical_slug, m.name.replace(/^[^:]+:\s*/, "")]);
+}
+
+export async function fetchModelNames(): Promise<[string, string][]> {
+  const res = await fetch("https://openrouter.ai/api/v1/models", { headers: { authorization: `Bearer ${process.env.OPENROUTER_API_KEY}` } });
+  if (!res.ok) throw new Error(`GET /models -> ${res.status}`);
+  return parseModelNames(await res.json());
+}
+
+export function storeModelNames(names: [string, string][]): void {
+  const up = getDb().prepare("INSERT INTO model_names (permaslug, name) VALUES (?, ?) ON CONFLICT (permaslug) DO UPDATE SET name = excluded.name");
+  tx(() => { for (const [s, n] of names) up.run(s, n); });
+}
+
+/** All known display names; models missing from /models (stealth, retired) fall back to displayName()'s slug formatting. */
+export function modelNames(): Record<string, string> {
+  return Object.fromEntries(getDb().prepare("SELECT permaslug, name FROM model_names").all().map((r) => [String(r.permaslug), String(r.name)]));
+}
+
 /** Latest snapshot's as_of (ISO), for the required citation footer; null before any snapshot. */
 export function latestAsOf(): string | null {
   const r = getDb().prepare("SELECT as_of FROM snapshots ORDER BY id DESC LIMIT 1").get();

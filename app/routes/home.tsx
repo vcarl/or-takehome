@@ -2,6 +2,7 @@ import { Form, Link } from "react-router";
 import type { Route } from "./+types/home";
 import { isCovered, placeBet } from "../markets.server.ts";
 import { getUser, requireUser } from "../session.server.ts";
+import { modelNames } from "../rankings.server.ts";
 import { listMarkets, marketBets, usageByModel } from "../queries.server.ts";
 import { compact, displayName } from "../format.ts";
 
@@ -23,6 +24,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const closes = `${Math.floor(mins / 1440)}d ${Math.floor((mins % 1440) / 60)}h`;
 
   const usage = usageByModel();
+  const names = modelNames();
   const open = all.filter((m) => m.week_start === week);
   const slugs = open.flatMap((m) => (m.model_permaslug ? [m.model_permaslug] : []));
   const cards = open.map((m) => {
@@ -39,8 +41,8 @@ export async function loader({ request }: Route.LoaderArgs) {
         m,
         count: options.length,
         betCount: bets.length,
-        lead: lead && { slug: lead, name: displayName(lead, options) },
-        options: options.map((o) => ({ slug: o, name: displayName(o, options), tokens: lastOf(o), share: (lastOf(o) / total) * 100 })),
+        lead: lead && { slug: lead, name: displayName(lead, options, names) },
+        options: options.map((o) => ({ slug: o, name: displayName(o, options, names), tokens: lastOf(o), share: (lastOf(o) / total) * 100 })),
       };
     }
     // Complete weeks only: the trailing bucket is partial and would fake a crash.
@@ -50,7 +52,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     return {
       kind: "growth" as const,
       m,
-      name: displayName(m.model_permaslug!, slugs),
+      name: displayName(m.model_permaslug!, slugs, names),
       series: series.map((p) => p.tokens),
       last,
       wow: last !== null && prev ? ((last - prev) / prev) * 100 : null,
@@ -61,11 +63,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   const settled = [...new Set(all.filter((m) => m.status === "resolved").map((m) => m.week_start))].map((w) => {
     const ms = all.filter((m) => m.week_start === w && m.status === "resolved");
     const top = ms.find((m) => m.kind === "top_model")?.resolved_value ?? null;
-    return { week: w, top: top && displayName(top), topSlug: top, growth: ms.filter((m) => m.kind === "growth").length };
+    return { week: w, top: top && displayName(top, [], names), topSlug: top, growth: ms.filter((m) => m.kind === "growth").length };
   });
   // One shared y-scale (0..max) so sparklines compare across models.
-  const maxTokens = Math.max(1, ...cards.flatMap((c) => (c.kind === "growth" ? c.series : [])));
-  return { week, closes, cards, settled, maxTokens, user: await getUser(request) };
+  // One shared log-scale y-axis and week axis so sparklines compare across models.
+  const all_ = cards.flatMap((c) => (c.kind === "growth" ? c.series.filter((v) => v > 0) : []));
+  const scale = { lo: Math.min(...all_), hi: Math.max(...all_), span: Math.max(2, ...cards.map((c) => (c.kind === "growth" ? c.series.length : 0))) };
+  return { week, closes, cards, settled, scale, user: await getUser(request) };
 }
 
 /** Hero form: place a top_model bet without leaving the page. */
@@ -79,14 +83,18 @@ export async function action({ request }: Route.ActionArgs) {
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Prediction failed" };
   }
-  return { ok: `Prediction placed on ${displayName(option)}` };
+  return { ok: `Prediction placed on ${displayName(option, [], modelNames())}` };
 }
 
 const dm = (w: string) => new Date(`${w}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 
-function Spark({ values, name, max }: { values: number[]; name: string; max: number }) {
+type Scale = { lo: number; hi: number; span: number };
+/** Log y-scale shared across cards; shorter histories end at the right edge (latest week). */
+function Spark({ values, name, scale: { lo, hi, span } }: { values: number[]; name: string; scale: Scale }) {
   if (values.length < 2) return <span className="muted">no history</span>;
-  const pts = values.map((v, i) => `${((i / (values.length - 1)) * 116 + 2).toFixed(1)},${(30 - (v / max) * 28).toFixed(1)}`).join(" ");
+  const y = (v: number) => 30 - ((Math.log(Math.max(v, lo)) - Math.log(lo)) / (Math.log(hi / lo) || 1)) * 28;
+  const off = span - values.length;
+  const pts = values.map((v, i) => `${(((off + i) / (span - 1)) * 116 + 2).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
   return (
     <svg className="spark" viewBox="0 0 120 32" role="img" aria-label={`${name} weekly tokens: ${compact(values[0]!)} to ${compact(values.at(-1)!)} over ${values.length} weeks`}>
       <polyline points={pts} />
@@ -94,7 +102,7 @@ function Spark({ values, name, max }: { values: number[]; name: string; max: num
   );
 }
 
-export default function Home({ loaderData: { week, closes, cards, settled, maxTokens, user }, actionData }: Route.ComponentProps) {
+export default function Home({ loaderData: { week, closes, cards, settled, scale, user }, actionData }: Route.ComponentProps) {
   return (
     <>
       <h1>{week ? `Week of ${dm(week)}` : "No open week"}</h1>
@@ -135,7 +143,7 @@ export default function Home({ loaderData: { week, closes, cards, settled, maxTo
           ) : (
             <section key={c.m.id} className="card">
               <h2 title={c.m.model_permaslug!}>{c.name}</h2>
-              <Spark values={c.series} name={c.name} max={maxTokens} />
+              <Spark values={c.series} name={c.name} scale={scale} />
               <span>
                 <span className="stat">{c.last === null ? "--" : compact(c.last)}</span>{" "}
                 {c.wow !== null && (

@@ -3,17 +3,22 @@ export const fmt = (n: number) => (Math.round(n * 100) / 100).toLocaleString("en
 const ACRONYMS = new Set(["gpt", "glm", "llm", "ai"]);
 const stripSlug = (slug: string) => slug.replace(/^[^/]*\//, "").replace(/-\d{8}$/, "");
 
-/** "deepseek/deepseek-v4.1-flash-20251101" -> "Deepseek v4.1 Flash". Siblings that would collide keep their date suffix. */
-export function displayName(slug: string, siblings: string[] = []): string {
-  const base = stripSlug(slug);
-  const collides = siblings.some((s) => s !== slug && stripSlug(s) === base);
-  const name = base
-    .split("-")
-    .map((t) => (/^v?\d/i.test(t) ? t.replace(/^V(?=\d)/, "v") : ACRONYMS.has(t) ? t.toUpperCase() : t.charAt(0).toUpperCase() + t.slice(1)))
-    .join(" ");
+export type Names = Record<string, string>;
+
+/** OpenRouter's display name for a permaslug, else formatted from the slug. Siblings whose names would collide get the release date, e.g. "(Oct 17)". */
+export function displayName(slug: string, siblings: string[] = [], names: Names = {}): string {
+  const name = baseName(slug, names);
+  const collides = siblings.some((s) => s !== slug && baseName(s, names) === name);
   const d = collides ? slug.match(/-(\d{4})(\d{2})(\d{2})$/) : null;
   // Suffix is the model's release date, e.g. "(Oct 17)".
   return d ? `${name} (${new Date(`${d[1]}-${d[2]}-${d[3]}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })})` : name;
+}
+
+function baseName(slug: string, names: Names): string {
+  return names[slug] ?? stripSlug(slug)
+    .split("-")
+    .map((t) => (/^v?\d/i.test(t) ? t.replace(/^V(?=\d)/, "v") : ACRONYMS.has(t) ? t.toUpperCase() : t.charAt(0).toUpperCase() + t.slice(1)))
+    .join(" ");
 }
 
 /** 59.2T, 812B, 3.4M */
@@ -24,5 +29,5 @@ export function compact(n: number): string {
   return String(Math.round(n));
 }
 
-export const title = (m: { kind: string; model_permaslug: string | null }, siblings?: string[]) =>
-  m.kind === "top_model" ? "Top model by tokens" : `Growth: ${displayName(m.model_permaslug!, siblings)}`;
+export const title = (m: { kind: string; model_permaslug: string | null }, names?: Names) =>
+  m.kind === "top_model" ? "Top model by tokens" : `Growth: ${displayName(m.model_permaslug!, [], names)}`;

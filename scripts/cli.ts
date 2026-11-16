@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { getDb } from "../app/db.server.ts";
 import { addDays, weekStart } from "../app/domain/week.ts";
 import { openWeek, resolveReady } from "../app/markets.server.ts";
-import { fetchDataset, parseDataset, storeSnapshot } from "../app/rankings.server.ts";
+import { fetchDataset, fetchModelNames, parseDataset, parseModelNames, storeModelNames, storeSnapshot } from "../app/rankings.server.ts";
 
 try {
   process.loadEnvFile(".env"); // CLI only (key is read lazily by fetchDataset, never printed)
@@ -16,13 +16,18 @@ const db = getDb();
 async function takeSnapshot(fixture?: string) {
   const ds = fixture ? parseDataset(JSON.parse(readFileSync(resolve(fixture), "utf8"))) : await fetchDataset();
   const r = storeSnapshot(ds, fixture ? `fixture:${fixture}` : "live");
-  console.log(`snapshot ${r.snapshotId}: ${ds.rows.length} rows, weeks ${r.from}..${r.to}, as_of ${ds.asOf}`);
+  const names = fixture ? loadNamesFixture() : await fetchModelNames();
+  storeModelNames(names);
+  console.log(`snapshot ${r.snapshotId}: ${ds.rows.length} rows, weeks ${r.from}..${r.to}, as_of ${ds.asOf}; ${names.length} model names`);
 }
+
+const loadNamesFixture = () => parseModelNames(JSON.parse(readFileSync(resolve(import.meta.dirname, "../fixtures/models.json"), "utf8")));
 
 function seedDemo(fixture: string) {
   if (db.prepare("SELECT 1 FROM markets LIMIT 1").get()) throw new Error("seed-demo needs a fresh DB (markets already exist); delete data/ first");
   const ds = parseDataset(JSON.parse(readFileSync(resolve(fixture), "utf8")));
   storeSnapshot(ds, `fixture:${fixture}`);
+  storeModelNames(loadNamesFixture());
   // Demo "now" = the fixture's as_of. Last complete week is resolved (with the 2 before it); the week
   // containing as_of is locked (started, unresolved); the next week is open for live betting.
   const demoNow = new Date(ds.asOf);

@@ -4,6 +4,7 @@ import { placeBet } from "../markets.server.ts";
 import { getMarket, marketBets } from "../queries.server.ts";
 import { getUser, requireUser } from "../session.server.ts";
 import { displayName, fmt, title } from "../format.ts";
+import { useNames } from "../root.tsx";
 
 const median = (xs: number[]) => {
   if (!xs.length) return null;
@@ -41,16 +42,17 @@ export async function action({ request, params }: Route.ActionArgs) {
 }
 
 export default function MarketPage({ loaderData: { market: m, bets, options, staked, median, user }, actionData }: Route.ComponentProps) {
+  const names = useNames();
   const open = m.status === "open" && Date.now() < Date.parse(`${m.week_start}T00:00:00Z`);
   return (
     <>
       <p><Link to="/">&larr; This week</Link></p>
-      <h1 title={m.model_permaslug ?? undefined}>{title(m)}</h1>
+      <h1 title={m.model_permaslug ?? undefined}>{title(m, names)}</h1>
       <p className="muted">
         Week of {m.week_start} · {m.status === "open" ? (open ? `bets close ${m.week_start} 00:00 UTC` : "betting closed") : "resolved"} · {fmt(m.total_staked)} staked · {m.bet_count} bets
       </p>
       {m.status === "resolved" && (
-        <p className="card"><strong>Result:</strong> {m.kind === "growth" && m.resolved_value ? `${Number(m.resolved_value).toFixed(2)}% growth` : (m.resolved_value ?? "n/a")}</p>
+        <p className="card"><strong>Result:</strong> {m.kind === "growth" && m.resolved_value ? `${Number(m.resolved_value).toFixed(2)}% growth` : (m.resolved_value ? displayName(m.resolved_value, [], names) : "n/a")}</p>
       )}
       <section className="card">
         <h2>How it pays</h2>
@@ -65,7 +67,7 @@ export default function MarketPage({ loaderData: { market: m, bets, options, sta
         {m.kind === "top_model" ? (
           <table>
             <thead><tr><th>Option</th><th>Staked</th><th>Implied multiplier</th></tr></thead>
-            <tbody>{staked.map((s) => <tr key={s.option}><td title={s.option}>{displayName(s.option, options)}</td><td>{fmt(s.staked)}</td><td>{s.multiplier ? `${s.multiplier.toFixed(2)}x` : "-"}</td></tr>)}</tbody>
+            <tbody>{staked.map((s) => <tr key={s.option}><td title={s.option}>{displayName(s.option, options, names)}</td><td>{fmt(s.staked)}</td><td>{s.multiplier ? `${s.multiplier.toFixed(2)}x` : "-"}</td></tr>)}</tbody>
           </table>
         ) : (
           <p>Median prediction: {median === null ? "no bets yet" : `${median.toFixed(1)}%`}</p>
@@ -80,7 +82,7 @@ export default function MarketPage({ loaderData: { market: m, bets, options, sta
                 <label>Option
                   <select name="option" required defaultValue="">
                     <option value="" disabled>Choose...</option>
-                    {staked.map((s) => <option key={s.option} value={s.option} title={s.option}>{displayName(s.option, options)}</option>)}
+                    {staked.map((s) => <option key={s.option} value={s.option} title={s.option}>{displayName(s.option, options, names)}</option>)}
                   </select>
                 </label>
               ) : (
@@ -105,7 +107,7 @@ export default function MarketPage({ loaderData: { market: m, bets, options, sta
               {bets.map((b) => (
                 <tr key={b.id}>
                   <td>{b.username}</td>
-                  <td title={b.choice_text ?? undefined}>{b.choice_text ? displayName(b.choice_text, options) : `${b.predicted_pct}%`}</td>
+                  <td title={b.choice_text ?? undefined}>{b.choice_text ? displayName(b.choice_text, options, names) : `${b.predicted_pct}%`}</td>
                   <td>{fmt(b.stake)}</td>
                   {m.status === "resolved" && <><td>{fmt((b.winnings ?? 0) / b.stake)}x</td><td>{fmt(b.winnings ?? 0)}</td></>}
                 </tr>
