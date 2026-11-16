@@ -8,9 +8,8 @@ Time-boxed take-home (devrel/community role). MVP first; real auth is a stretch.
 - **Karma** = spend currency. Every user starts with 1000; +100 weekly grant (claimed lazily, once per ISO week, on any authenticated request). Staking burns karma — win or lose, it's spent.
 - **Winnings** = separate, monotonically increasing score, minted at resolution as `stake × multiplier`. Bigger stake → bigger winnings. Public leaderboard ranks by winnings.
 - **Market types** (per week):
-  - `top_model` — categorical: which model is #1 by total tokens (prompt+completion). Options = last week's top 10. Multiplier = `total staked in market / total staked on winning option` (contrarian picks pay more; 0 if wrong).
   - `growth` — numeric, one per model in last week's top 8: predict week-over-week % change in total tokens. Multiplier = `3 × max(0, 1 − |predicted − actual| / 25)` (percentage points).
-  - `top5` — ranked slate, one per week, same options as `top_model`: bet = 5 distinct options in order (JSON array in `bets.choice_text`). Per slot 1 pt if exact position, 0.4 if in the actual top 5 elsewhere; multiplier = `3 × points / 5`. Only created when there are ≥5 options. DBs created before this change must be recreated (kind CHECK has no migration).
+  - `top5` — ranked slate, one per week, options = last week's top 10 (submitted from the home-page hero): bet = 5 distinct options in order (JSON array in `bets.choice_text`). Per slot 1 pt if exact position, 0.4 if in the actual top 5 elsewhere; multiplier = `3 × points / 5`. Only created when there are ≥5 options. `top_model` (parimutuel #1 pick) was retired in favor of this; DBs that predate either change must be recreated (kind CHECK has no migration).
 - All payout math lives in one pure module (`app/domain/payout.ts`) with Vitest coverage.
 
 ## Data source

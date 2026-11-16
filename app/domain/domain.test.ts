@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { growthMultiplier, growthPct, slateMultiplier, topModelMultiplier, topN } from "./payout.ts";
+import { growthMultiplier, growthPct, slateMultiplier } from "./payout.ts";
 import { isoWeekKey, weekStart } from "./week.ts";
 
 describe("week", () => {
@@ -19,12 +19,6 @@ describe("payout", () => {
   it("growth pct and zero prior", () => {
     expect(growthPct(100, 150)).toBe(50);
     expect(growthPct(0, 10)).toBeNull();
-  });
-  it("top model multiplier: contrarian, sole bettor, no bets on winner", () => {
-    expect(topModelMultiplier(100, 25, true)).toBe(4);
-    expect(topModelMultiplier(50, 50, true)).toBe(1);
-    expect(topModelMultiplier(100, 0, false)).toBe(0);
-    expect(topModelMultiplier(100, 25, false)).toBe(0);
   });
   it("growth multiplier", () => {
     expect(growthMultiplier(10, 10)).toBe(3);

@@ -20,8 +20,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const usage = usageByModel();
   const names = modelNames();
-  // Hero = the top5 slate. ponytail: top_model stays reachable at /markets, pending a decision to retire it.
-  const open = all.filter((m) => m.week_start === week && m.kind !== "top_model");
+  const open = all.filter((m) => m.week_start === week);
   const slugs = open.flatMap((m) => (m.model_permaslug ? [m.model_permaslug] : []));
   const cards = open.map((m) => {
     const bets = marketBets(m.id);
@@ -53,8 +52,9 @@ export async function loader({ request }: Route.LoaderArgs) {
   });
   const settled = [...new Set(all.filter((m) => m.status === "resolved").map((m) => m.week_start))].map((w) => {
     const ms = all.filter((m) => m.week_start === w && m.status === "resolved");
-    const top = ms.find((m) => m.kind === "top_model")?.resolved_value ?? null;
-    return { week: w, top: top && displayName(top, [], names), topSlug: top, growth: ms.filter((m) => m.kind === "growth").length };
+    const slate = ms.find((m) => m.kind === "top5")?.resolved_value;
+    const top: string | null = slate ? JSON.parse(slate)[0] ?? null : null;
+    return { week: w, top: top && displayName(top, [], names), topSlug: top };
   });
   // One shared log-scale y-axis and week axis so sparklines compare across models.
   const all_ = cards.flatMap((c) => (c.kind === "growth" ? c.series.filter((v) => v > 0) : []));
@@ -181,11 +181,7 @@ export default function Home({ loaderData: { week, closes, cards, settled, scale
                   <span className={c.wow >= 0 ? "up" : "down"}>{c.wow >= 0 ? "▲" : "▼"} {Math.abs(c.wow).toFixed(1)}%</span>
                 )}
               </span>
-              {c.median === null ? (
-                <Link className="cta" to={`/markets/${c.m.id}`}>Make the first prediction</Link>
-              ) : (
-                <span className="muted">Crowd: {`${c.median > 0 ? "+" : ""}${c.median.toFixed(0)}%`} · {c.betCount} predictions</span>
-              )}
+              <span className="muted">{c.median === null ? "No predictions yet" : `Crowd: ${c.median > 0 ? "+" : ""}${c.median.toFixed(0)}% · ${c.betCount} predictions`}</span>
               <Link className="btn" to={`/markets/${c.m.id}`}>Predict</Link>
             </section>
           ),
@@ -196,8 +192,8 @@ export default function Home({ loaderData: { week, closes, cards, settled, scale
         <ul className="settled">
           {settled.map((s) => (
             <li key={s.week}>
-              <Link to={`/markets?status=resolved&week=${s.week}`}>Week of {dm(s.week)}</Link>{" "}
-              <span className="muted">· #1 <span title={s.topSlug ?? undefined}>{s.top ?? "n/a"}</span> · {s.growth} growth markets</span>
+              <Link to={`/markets#${s.week}`}>Week of {dm(s.week)}</Link>{" "}
+              <span className="muted">· #1 <span title={s.topSlug ?? undefined}>{s.top ?? "n/a"}</span></span>
             </li>
           ))}
         </ul>

@@ -6,7 +6,7 @@ const rows = <T,>(sql: string, ...args: (string | number)[]) =>
 export interface MarketRow {
   id: number;
   week_start: string;
-  kind: "top_model" | "growth" | "top5";
+  kind: "growth" | "top5";
   model_permaslug: string | null;
   options_json: string | null;
   status: "open" | "resolved";
@@ -18,19 +18,7 @@ export interface MarketRow {
 const MARKET_SQL = `SELECT m.*, COALESCE(SUM(b.stake), 0) AS total_staked, COUNT(b.id) AS bet_count
   FROM markets m LEFT JOIN bets b ON b.market_id = m.id`;
 
-export function listMarkets(week?: string, status?: string): MarketRow[] {
-  const where: string[] = [];
-  const args: string[] = [];
-  if (week) (where.push("m.week_start = ?"), args.push(week));
-  if (status === "open" || status === "resolved") (where.push("m.status = ?"), args.push(status));
-  return rows<MarketRow>(
-    `${MARKET_SQL} ${where.length ? "WHERE " + where.join(" AND ") : ""}
-     GROUP BY m.id ORDER BY m.week_start DESC, m.kind DESC, m.id`,
-    ...args,
-  );
-}
-
-export const weeks = () => rows<{ week_start: string }>("SELECT DISTINCT week_start FROM markets ORDER BY 1 DESC").map((r) => r.week_start);
+export const listMarkets = () => rows<MarketRow>(`${MARKET_SQL} GROUP BY m.id ORDER BY m.week_start DESC, m.kind DESC, m.id`);
 
 export const getMarket = (id: number) => rows<MarketRow>(`${MARKET_SQL} WHERE m.id = ? GROUP BY m.id`, id)[0];
 
@@ -67,12 +55,10 @@ export const ledger = (userId: number) =>
   );
 
 export const leaderboard = () =>
-  rows<{ username: string; winnings: number; bets: number; resolved: number; hits: number }>(
+  rows<{ username: string; winnings: number; bets: number }>(
     `SELECT u.username,
        COALESCE((SELECT SUM(amount) FROM winnings_ledger WHERE user_id = u.id), 0) AS winnings,
-       (SELECT COUNT(*) FROM bets WHERE user_id = u.id) AS bets,
-       (SELECT COUNT(*) FROM bets b JOIN markets m ON m.id = b.market_id WHERE b.user_id = u.id AND m.status = 'resolved') AS resolved,
-       (SELECT COUNT(*) FROM winnings_ledger WHERE user_id = u.id) AS hits
+       (SELECT COUNT(*) FROM bets WHERE user_id = u.id) AS bets
      FROM users u ORDER BY winnings DESC, u.username`,
   );
 

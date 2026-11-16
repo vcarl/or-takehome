@@ -9,17 +9,15 @@ export default function Leaderboard({ loaderData: { rows } }: Route.ComponentPro
     <>
       <h1>Leaderboard</h1>
       <table>
-        <thead><tr><th>#</th><th>User</th><th>Winnings</th><th>Bets</th><th>Hit rate</th></tr></thead>
+        <thead><tr><th>#</th><th>User</th><th>Winnings</th><th>Bets</th></tr></thead>
         <tbody>
           {rows.map((r, i) => (
             <tr key={r.username}>
               <td>{i + 1}</td><td>{r.username}</td><td>{fmt(r.winnings)}</td><td>{r.bets}</td>
-              <td>{r.resolved ? `${Math.round((100 * r.hits) / r.resolved)}%` : "-"}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      <p className="muted">Hit rate = resolved bets that paid out.</p>
     </>
   );
 }

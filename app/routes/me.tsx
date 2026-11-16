@@ -23,7 +23,7 @@ export default function Me({ loaderData: { bets, ledger } }: Route.ComponentProp
               <tr key={b.id}>
                 <td><Link to={`/markets/${b.market_id}`}>{b.week_start} {title(b, names)}</Link></td>
                 <td>{b.status}</td>
-                <td>{choiceLabel(b, b.kind, names)}</td>
+                <td>{choiceLabel(b, names)}</td>
                 <td>{fmt(b.stake)}</td>
                 <td>{b.status === "resolved" ? `${fmt((b.winnings ?? 0) / b.stake)}x` : "-"}</td>
                 <td>{b.status === "resolved" ? fmt(b.winnings ?? 0) : "-"}</td>

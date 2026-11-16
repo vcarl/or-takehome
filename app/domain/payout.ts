@@ -8,11 +8,6 @@ export function growthPct(prior: number, current: number): number | null {
   return prior > 0 ? ((current - prior) / prior) * 100 : null;
 }
 
-/** top_model: total staked / staked on winner; 0 if nobody (or you) picked wrong. */
-export function topModelMultiplier(totalStaked: number, stakedOnWinner: number, myChoiceIsWinner: boolean): number {
-  return myChoiceIsWinner && stakedOnWinner > 0 ? totalStaked / stakedOnWinner : 0;
-}
-
 /** growth: 3 × max(0, 1 − |predicted − actual| / 25), in percentage points. */
 export function growthMultiplier(predictedPct: number, actualPct: number): number {
   return 3 * Math.max(0, 1 - Math.abs(predictedPct - actualPct) / 25);

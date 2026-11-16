@@ -1,5 +1,5 @@
 import { getDb, tx } from "./db.server.ts";
-import { growthMultiplier, growthPct, slateMultiplier, topModelMultiplier, topN } from "./domain/payout.ts";
+import { growthMultiplier, growthPct, slateMultiplier, topN } from "./domain/payout.ts";
 import { addDays, isoWeekKey } from "./domain/week.ts";
 import type { MarketRow } from "./queries.server.ts";
 import { latestAsOf } from "./rankings.server.ts";
@@ -46,11 +46,7 @@ export function openWeek(week: string): number {
   return tx(() => {
     let n = 0;
     const top10 = topN(prior, 10);
-    if (top10.length) {
-      const opts = JSON.stringify(top10.map(([m]) => m));
-      n += Number(ins.run(week, "top_model", null, opts).changes);
-      if (top10.length >= 5) n += Number(ins.run(week, "top5", null, opts).changes); // a slate needs 5 distinct options
-    }
+    if (top10.length >= 5) n += Number(ins.run(week, "top5", null, JSON.stringify(top10.map(([m]) => m))).changes); // a slate needs 5 distinct options
     for (const [m, t] of topN(prior, 8)) if (t > 0) n += Number(ins.run(week, "growth", m, null).changes);
     return n;
   });
@@ -102,7 +98,7 @@ export function placeBet(
   userId: number,
   marketId: number,
   stake: number,
-  choice: string | string[] | number,
+  choice: string[] | number,
   now = new Date(),
 ): number {
   const db = getDb();
@@ -115,11 +111,7 @@ export function placeBet(
     if (karmaBalance(userId) < stake) throw new Error("insufficient karma");
     let text: string | null = null;
     let pct: number | null = null;
-    if (m.kind === "top_model") {
-      if (typeof choice !== "string" || !(JSON.parse(m.options_json!) as string[]).includes(choice))
-        throw new Error("choice is not an option");
-      text = choice;
-    } else if (m.kind === "top5") {
+    if (m.kind === "top5") {
       const slate = choice;
       if (!Array.isArray(slate) || slate.length !== 5 || new Set(slate).size !== 5) throw new Error("pick 5 distinct models");
       const opts = JSON.parse(m.options_json!) as string[];
@@ -157,12 +149,7 @@ function resolveMarket(m: Market): void {
   const bets = db.prepare("SELECT * FROM bets WHERE market_id = ?").all(m.id) as unknown as Bet[];
   let value: string | null;
   let mult: (b: Bet) => number;
-  if (m.kind === "top_model") {
-    value = topN(cur, 1)[0]?.[0] ?? null;
-    const total = bets.reduce((s, b) => s + b.stake, 0);
-    const onWinner = bets.filter((b) => b.choice_text === value).reduce((s, b) => s + b.stake, 0);
-    mult = (b) => topModelMultiplier(total, onWinner, b.choice_text === value);
-  } else if (m.kind === "top5") {
+  if (m.kind === "top5") {
     const actual = topN(cur, 5).map(([s]) => s);
     value = JSON.stringify(actual);
     mult = (b) => slateMultiplier(JSON.parse(b.choice_text!), actual);

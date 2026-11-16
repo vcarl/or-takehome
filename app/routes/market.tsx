@@ -3,7 +3,7 @@ import type { Route } from "./+types/market";
 import { placeBet } from "../markets.server.ts";
 import { getMarket, marketBets } from "../queries.server.ts";
 import { getUser, requireUser } from "../session.server.ts";
-import { choiceLabel, displayName, fmt, median, resolvedLabel, title } from "../format.ts";
+import { choiceLabel, fmt, median, resolvedLabel, title } from "../format.ts";
 import { useNames } from "../root.tsx";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
@@ -11,12 +11,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   if (!market) throw data("No such market", { status: 404 });
   const bets = marketBets(market.id);
   const options: string[] = market.options_json ? JSON.parse(market.options_json) : [];
-  const staked = options.map((o) => {
-    const s = bets.filter((b) => b.choice_text === o).reduce((a, b) => a + b.stake, 0);
-    return { option: o, staked: s, multiplier: s > 0 ? market.total_staked / s : null };
-  });
   const med = median(bets.map((b) => b.predicted_pct).filter((p): p is number => p !== null));
-  return { market, bets, options, staked, median: med, user: await getUser(request) };
+  return { market, bets, options, median: med, user: await getUser(request) };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -24,26 +20,18 @@ export async function action({ request, params }: Route.ActionArgs) {
   const f = await request.formData();
   const market = getMarket(Number(params.id));
   if (!market) throw data("No such market", { status: 404 });
-  const stake = Number(f.get("stake"));
-  if (market.kind === "top5") {
-    try {
-      placeBet(user.id, market.id, stake, [1, 2, 3, 4, 5].map((i) => String(f.get(`slot${i}`) ?? "")));
-    } catch (e) {
-      return { error: e instanceof Error ? e.message : "Bet failed" };
-    }
-    return { ok: true };
-  }
-  const raw = String(f.get(market.kind === "growth" ? "pct" : "option") ?? "");
-  if (raw === "") return { error: market.kind === "growth" ? "Enter a predicted %" : "Pick an option" };
+  // Growth only: top5 slates are submitted from the home page hero.
+  const raw = String(f.get("pct") ?? "");
+  if (raw === "") return { error: "Enter a predicted %" };
   try {
-    placeBet(user.id, market.id, stake, market.kind === "growth" ? Number(raw) : raw);
+    placeBet(user.id, market.id, Number(f.get("stake")), Number(raw));
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Bet failed" };
   }
   return { ok: true };
 }
 
-export default function MarketPage({ loaderData: { market: m, bets, options, staked, median, user }, actionData }: Route.ComponentProps) {
+export default function MarketPage({ loaderData: { market: m, bets, options, median, user }, actionData }: Route.ComponentProps) {
   const names = useNames();
   const open = m.status === "open" && Date.now() < Date.parse(`${m.week_start}T00:00:00Z`);
   return (
@@ -58,9 +46,7 @@ export default function MarketPage({ loaderData: { market: m, bets, options, sta
       )}
       <section className="card">
         <h2>How it pays</h2>
-        {m.kind === "top_model" ? (
-          <p>Stake karma on the model you think is #1 by total tokens. If right, you win your stake × (total staked in this market ÷ total staked on the winning option), so contrarian picks pay more. If wrong, 0. Stake is spent either way.</p>
-        ) : m.kind === "top5" ? (
+        {m.kind === "top5" ? (
           <p>Rank your top 5 models by total tokens. Each slot scores 1 point if that model lands in exactly that position, 0.4 if it is in the actual top 5 but a different slot. You win your stake × 3 × points ÷ 5 (a perfect slate pays 3x). Stake is spent either way.</p>
         ) : (
           <p>Predict the week-over-week % change in total tokens. You win your stake × 3 × max(0, 1 − |predicted − actual| ÷ 25), with the error in percentage points. Stake is spent either way.</p>
@@ -68,41 +54,20 @@ export default function MarketPage({ loaderData: { market: m, bets, options, sta
       </section>
       <section className="card">
         <h2>Crowd</h2>
-        {m.kind === "top_model" ? (
-          <table>
-            <thead><tr><th>Option</th><th>Staked</th><th>Implied multiplier</th></tr></thead>
-            <tbody>{staked.map((s) => <tr key={s.option}><td title={s.option}>{displayName(s.option, options, names)}</td><td>{fmt(s.staked)}</td><td>{s.multiplier ? `${s.multiplier.toFixed(2)}x` : "-"}</td></tr>)}</tbody>
-          </table>
-        ) : m.kind === "top5" ? (
+        {m.kind === "top5" ? (
           <p>{m.bet_count} slates submitted.</p>
         ) : (
           <p>Median prediction: {median === null ? "no bets yet" : `${median.toFixed(1)}%`}</p>
         )}
       </section>
-      {open && (
+      {open && (m.kind === "top5" ? (
+        <p><Link className="btn" to="/">Rank your top 5 on the home page</Link></p>
+      ) : (
         <section className="card">
           <h2>Place a bet</h2>
           {user ? (
             <Form method="post">
-              {m.kind === "top_model" ? (
-                <label>Option
-                  <select name="option" required defaultValue="">
-                    <option value="" disabled>Choose...</option>
-                    {staked.map((s) => <option key={s.option} value={s.option} title={s.option}>{displayName(s.option, options, names)}</option>)}
-                  </select>
-                </label>
-              ) : m.kind === "top5" ? (
-                [1, 2, 3, 4, 5].map((i) => (
-                  <label key={i}>#{i}
-                    <select name={`slot${i}`} required defaultValue="">
-                      <option value="" disabled>Choose...</option>
-                      {options.map((o) => <option key={o} value={o} title={o}>{displayName(o, options, names)}</option>)}
-                    </select>
-                  </label>
-                ))
-              ) : (
-                <label>Predicted % change <input name="pct" type="number" step="0.1" required /></label>
-              )}
+              <label>Predicted % change <input name="pct" type="number" step="0.1" required /></label>
               <label>Stake (karma, you have {fmt(user.karma)}) <input name="stake" type="number" min="1" step="1" required /></label>
               {actionData && "error" in actionData && <p className="error" role="alert">{actionData.error}</p>}
               {actionData && "ok" in actionData && <p className="good">Bet placed.</p>}
@@ -112,7 +77,7 @@ export default function MarketPage({ loaderData: { market: m, bets, options, sta
             <p><Link to="/login">Log in</Link> to bet.</p>
           )}
         </section>
-      )}
+      ))}
       <section className="card">
         <h2>Bets</h2>
         {bets.length === 0 ? <p className="muted">None yet.</p> : (
@@ -122,7 +87,7 @@ export default function MarketPage({ loaderData: { market: m, bets, options, sta
               {bets.map((b) => (
                 <tr key={b.id}>
                   <td>{b.username}</td>
-                  <td title={b.choice_text ?? undefined}>{choiceLabel(b, m.kind, names, options)}</td>
+                  <td title={b.choice_text ?? undefined}>{choiceLabel(b, names, options)}</td>
                   <td>{fmt(b.stake)}</td>
                   {m.status === "resolved" && <><td>{fmt((b.winnings ?? 0) / b.stake)}x</td><td>{fmt(b.winnings ?? 0)}</td></>}
                 </tr>

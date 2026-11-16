@@ -27,8 +27,6 @@ input, select, button { font: inherit; padding: .4rem .6rem; border: 1px solid v
 button { background: var(--accent); color: var(--on-accent); border-color: var(--accent); cursor: pointer; }
 button.link { background: none; color: var(--accent); border: 0; padding: 0; }
 label { display: block; margin-bottom: .5rem; }
-.filters { display: flex; gap: var(--space); flex-wrap: wrap; align-items: end; margin-bottom: var(--space); }
-details summary { cursor: pointer; }
 footer { max-width: 56rem; margin: 0 auto; padding: var(--space); }
 footer div { border-top: 1px solid var(--border); padding-top: var(--space); color: var(--muted); font-size: .8em; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space); margin-bottom: var(--space); }
@@ -65,4 +63,3 @@ footer div { border-top: 1px solid var(--border); padding-top: var(--space); col
 @media (max-width: 600px) { .slate { grid-template-columns: 1fr; } }
 .hero-submit { display: flex; gap: var(--space); align-items: center; flex-wrap: wrap; }
 .hero-submit input { width: 6rem; }
-.cta { color: var(--accent); font-size: .9em; }
