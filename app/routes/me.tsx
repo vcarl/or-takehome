@@ -25,7 +25,7 @@ export default function Me({ loaderData: { bets, ledger } }: Route.ComponentProp
                 <td>{b.status}</td>
                 <td>{choiceLabel(b, names)}</td>
                 <td>{fmt(b.stake)}</td>
-                <td>{b.status === "resolved" ? `${fmt((b.winnings ?? 0) / b.stake)}x` : "-"}</td>
+                <td>{b.status !== "resolved" ? "-" : b.skill === null ? "void (refunded)" : `${fmt((b.winnings ?? 0) / b.stake)}x`}</td>
                 <td>{b.status === "resolved" ? fmt(b.winnings ?? 0) : "-"}</td>
               </tr>
             ))}

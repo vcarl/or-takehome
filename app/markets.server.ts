@@ -141,7 +141,7 @@ export function placeBet(userId: number, marketId: number, stake: number, pick: 
       const opts = JSON.parse(m.options_json!) as string[];
       if (!slate.every((s) => opts.includes(s))) throw new Error("choice is not an option");
       const cs = pick.conf ?? Array(5).fill("lean");
-      if (cs.length !== 5 || !cs.every((c) => c in CONF)) throw new Error("confidence must be lean, likely or lock");
+      if (cs.length !== 5 || !cs.every((c) => Object.hasOwn(CONF, c))) throw new Error("confidence must be lean, likely or lock");
       text = JSON.stringify(slate);
       conf = JSON.stringify(cs);
     } else {
@@ -182,7 +182,7 @@ function resolveMarket(m: Market): void {
   const cur = totalsFor(m.week_start);
   const bets = db.prepare("SELECT * FROM bets WHERE market_id = ?").all(m.id) as unknown as Bet[];
   let value: string | null;
-  let skill: (b: Bet) => number | null; // null = void (no prior-week data), pays 0
+  let skill: (b: Bet) => number | null; // null = void (no prior-week data): stake refunded
   if (m.kind === "top5") {
     const actual = topN(cur, 5).map(([s]) => s);
     value = JSON.stringify(actual);
@@ -199,9 +199,13 @@ function resolveMarket(m: Market): void {
     db.prepare("UPDATE markets SET status = 'resolved', resolved_value = ? WHERE id = ?").run(value, m.id);
     const mint = db.prepare("INSERT INTO winnings_ledger (user_id, amount, bet_id, created_at) VALUES (?,?,?,?)");
     const setSkill = db.prepare("UPDATE bets SET skill = ? WHERE id = ?");
+    const refund = db.prepare("INSERT INTO karma_ledger (user_id, delta, reason, ref, created_at) VALUES (?, ?, 'void_refund', ?, ?)");
     for (const b of bets) {
       const s = skill(b);
-      if (s === null) continue;
+      if (s === null) {
+        refund.run(b.user_id, b.stake, String(b.id), new Date().toISOString());
+        continue;
+      }
       setSkill.run(s, b.id);
       const amount = b.stake * multiplier(s);
       if (amount > 0) mint.run(b.user_id, amount, b.id, new Date().toISOString());

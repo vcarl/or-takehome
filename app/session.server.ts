@@ -2,6 +2,10 @@ import { createCookieSessionStorage, redirect } from "react-router";
 import { ensureWeeklyGrant, karmaBalance, winningsTotal } from "./markets.server.ts";
 import { getDb } from "./db.server.ts";
 
+function missingSecret(): never {
+  throw new Error("SESSION_SECRET must be set in production");
+}
+
 const storage = createCookieSessionStorage({
   cookie: {
     name: "orf_session",
@@ -9,7 +13,8 @@ const storage = createCookieSessionStorage({
     sameSite: "lax",
     path: "/",
     // Dev default only; set SESSION_SECRET in any real deployment.
-    secrets: [process.env.SESSION_SECRET ?? "dev-only-insecure-secret"],
+    secrets: [process.env.SESSION_SECRET ?? (process.env.NODE_ENV === "production" ? missingSecret() : "dev-only-insecure-secret")],
+    secure: process.env.NODE_ENV === "production",
   },
 });
 

@@ -30,12 +30,14 @@ export async function loader({ request }: Route.LoaderArgs) {
     if (m.kind === "top5") {
       // Options are last week's top 10, already in rank order.
       const options: string[] = JSON.parse(m.options_json ?? "[]");
+      const own = user ? bets.find((b) => b.user_id === user.id) : undefined;
       const lastOf = (s: string) => (usage.get(s) ?? []).filter((p) => isCovered(p.week)).at(-1)?.tokens ?? 0;
       return {
         kind: "slate" as const,
         m,
         betCount: bets.length,
         crowd,
+        mine: own ? { slate: JSON.parse(own.choice_text!) as string[], conf: JSON.parse(own.conf_json ?? "[]") as Conf[], stake: own.stake } : null,
         options: options.map((o) => ({ slug: o, name: displayName(o, options, names), tokens: lastOf(o) })),
       };
     }
@@ -63,7 +65,12 @@ export async function loader({ request }: Route.LoaderArgs) {
     const t5 = ms.find((m) => m.kind === "top5");
     const slate = t5?.resolved_value;
     const top: string | null = slate ? JSON.parse(slate)[0] ?? null : null;
-    return { week: w, id: t5?.id ?? null, top: top && displayName(top, [], names), topSlug: top };
+    const gs = ms.filter((m) => m.kind === "growth");
+    const growth = gs
+      .map((m) => ({ id: m.id, slug: m.model_permaslug!, name: displayName(m.model_permaslug!, gs.map((g) => g.model_permaslug!), names), pct: m.resolved_value === null ? null : Number(m.resolved_value) }))
+      .filter((g): g is typeof g & { pct: number } => g.pct !== null)
+      .sort((a, b) => b.pct - a.pct);
+    return { week: w, id: t5?.id ?? null, top: top && displayName(top, [], names), topSlug: top, growth };
   });
   // One shared log-scale y-axis and week axis so sparklines compare across models.
   const all_ = cards.flatMap((c) => (c.kind === "growth" ? c.series.filter((v) => v > 0) : []));
@@ -76,6 +83,7 @@ export async function action({ request }: Route.ActionArgs) {
   const user = await requireUser(request);
   const f = await request.formData();
   if (f.has("pct")) {
+    if (String(f.get("pct")).trim() === "") return { error: "Enter a prediction" };
     try {
       placeBet(user.id, Number(f.get("market")), Number(f.get("stake")), { pct: Number(f.get("pct")) });
     } catch (e) {
@@ -98,7 +106,10 @@ type Opt = { slug: string; name: string; tokens: number };
 const CYCLE: Conf[] = ["lean", "likely", "lock"];
 const CONF_LABEL: Record<Conf, string> = { lean: "Lean", likely: "Likely", lock: "Lock" };
 /** Tap-to-rank: tapping a model fills the next empty slot; tapping a filled slot (or the model again) clears it. */
-function SlateHero({ marketId, options, betCount, karma, result }: { marketId: number; options: Opt[]; betCount: number; karma: number | null; result?: { error: string } | { ok: string } }) {
+type Mine = { slate: string[]; conf: Conf[]; stake: number } | null;
+type SlateCrowd = { kind: "top5"; order: string[] } | { kind: string } | null;
+
+function SlateHero({ marketId, options, betCount, karma, result, mine, crowd }: { marketId: number; options: Opt[]; betCount: number; karma: number | null; result?: { error: string } | { ok: string }; mine: Mine; crowd: SlateCrowd }) {
   const [slots, setSlots] = useState<(string | null)[]>([null, null, null, null, null]);
   const [conf, setConf] = useState<Conf[]>(["lean", "lean", "lean", "lean", "lean"]);
   const cycle = (i: number) => setConf((cur) => cur.map((c, j) => (j === i ? CYCLE[(CYCLE.indexOf(c) + 1) % CYCLE.length]! : c)));
@@ -135,6 +146,20 @@ function SlateHero({ marketId, options, betCount, karma, result }: { marketId: n
         Rank the five models you think will use the most tokens next week. Payouts reward calling what changes: repeating last week's order returns only 90% of your stake, and spotting a model that moves up or down earns more. ·{" "}
         {betCount ? `${betCount} ${betCount === 1 ? "prediction" : "predictions"} so far` : "No predictions yet. Make the first one."}
       </p>
+      {mine ? (
+        <div className="card slate-mine">
+          <div>
+            <h3>Your prediction <span className="muted">({mine.stake} karma)</span></h3>
+            <ol>{mine.slate.map((s, i) => <li key={s}>{byslug.get(s)?.name ?? s} <span className="muted">· {CONF_LABEL[mine.conf[i] ?? "lean"]}</span></li>)}</ol>
+          </div>
+          {crowd && "order" in crowd && (
+            <div>
+              <h3>Crowd consensus <span className="muted">({betCount})</span></h3>
+              <ol>{crowd.order.slice(0, 5).map((s) => <li key={s}>{byslug.get(s)?.name ?? s}</li>)}</ol>
+            </div>
+          )}
+        </div>
+      ) : (
       <Form method="post" className="slate card">
         <input type="hidden" name="market" value={marketId} />
         <ol className="slots" aria-label="Your top 5">
@@ -202,6 +227,7 @@ function SlateHero({ marketId, options, betCount, karma, result }: { marketId: n
           {result && "ok" in result && <p className="up">{result.ok}</p>}
         </div>
       </Form>
+      )}
     </section>
   );
 }
@@ -271,7 +297,7 @@ export default function Home({ loaderData: { week, closes, cards, settled, scale
       <h1>{week ? `Week of ${dm(week)}` : "No open week"}</h1>
       <p className="muted">{week ? `Closes in ${closes}` : "No market is currently open for betting."}</p>
       {cards.map((c) => c.kind === "slate" && (
-        <SlateHero key={c.m.id} marketId={c.m.id} options={c.options} betCount={c.betCount} karma={user?.karma ?? null} result={actionData} />
+        <SlateHero key={c.m.id} marketId={c.m.id} options={c.options} betCount={c.betCount} karma={user?.karma ?? null} result={actionData} mine={c.mine} crowd={c.crowd} />
       ))}
       {cards.some((c) => c.kind === "growth") && (
         <>
@@ -303,6 +329,15 @@ export default function Home({ loaderData: { week, closes, cards, settled, scale
             <li key={s.week}>
               {s.id ? <Link to={`/markets/${s.id}`}>Week of {dm(s.week)}</Link> : `Week of ${dm(s.week)}`}{" "}
               <span className="muted">· #1 <span title={s.topSlug ?? undefined}>{s.top ?? "n/a"}</span></span>
+              {s.growth.length > 0 && (
+                <div className="settled-growth">
+                  {s.growth.map((g) => (
+                    <Link key={g.id} to={`/markets/${g.id}`} title={g.slug}>
+                      {g.name} <span className={g.pct >= 0 ? "up" : "down"}>{g.pct >= 0 ? "+" : "−"}{Math.abs(g.pct).toFixed(Math.abs(g.pct) < 10 ? 1 : 0)}%</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </li>
           ))}
         </ul>
