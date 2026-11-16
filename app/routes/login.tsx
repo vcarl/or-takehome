@@ -13,6 +13,7 @@ export async function action({ request }: Route.ActionArgs) {
   if (!/^[\w.-]{2,32}$/.test(username)) return { error: "Username: 2-32 letters, digits, _ . -" };
   const session = await getSession(request);
   session.set("userId", getOrCreateUser(username)); // new users get the +1000 initial karma
+  session.set("username", username);
   return redirect("/", { headers: { "Set-Cookie": await commitSession(session) } });
 }
 

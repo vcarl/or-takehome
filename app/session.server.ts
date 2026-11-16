@@ -26,10 +26,12 @@ export interface User {
 
 /** Current user (or null). Claims the lazy weekly karma grant on every authenticated load. */
 export async function getUser(request: Request): Promise<User | null> {
-  const id = (await getSession(request)).get("userId");
+  const session = await getSession(request);
+  const id = session.get("userId");
   if (typeof id !== "number") return null;
   const row = getDb().prepare("SELECT username FROM users WHERE id = ?").get(id);
-  if (!row) return null;
+  // The username check stops a stale cookie from adopting whoever now holds that id (e.g. after a DB recreate).
+  if (!row || row.username !== session.get("username")) return null;
   ensureWeeklyGrant(id);
   return { id, username: String(row.username), karma: karmaBalance(id), winnings: winningsTotal(id) };
 }
