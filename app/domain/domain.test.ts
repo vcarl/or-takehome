@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { growthMultiplier, growthPct, topModelMultiplier, topN, weeklyTotals } from "./payout.ts";
+import { growthMultiplier, growthPct, slateMultiplier, topModelMultiplier, topN, weeklyTotals } from "./payout.ts";
 import { isoWeekKey, weekStart } from "./week.ts";
 
 describe("week", () => {
@@ -42,5 +42,15 @@ describe("payout", () => {
     expect(growthMultiplier(10, 22.5)).toBeCloseTo(1.5);
     expect(growthMultiplier(0, 25)).toBe(0);
     expect(growthMultiplier(0, 80)).toBe(0);
+  });
+});
+
+describe("slateMultiplier", () => {
+  const actual = ["a", "b", "c", "d", "e"];
+  it("scores exact, swapped, disjoint and mixed slates", () => {
+    expect(slateMultiplier(actual, actual)).toBe(3);
+    expect(slateMultiplier(["b", "c", "d", "e", "a"], actual)).toBeCloseTo(1.2);
+    expect(slateMultiplier(["v", "w", "x", "y", "z"], actual)).toBe(0);
+    expect(slateMultiplier(["a", "c", "x", "d", "y"], actual)).toBeCloseTo(1.44); // 1 + .4 + 0 + 1 + 0
   });
 });

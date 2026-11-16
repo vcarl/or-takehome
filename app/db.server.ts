@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS weekly_usage (
   PRIMARY KEY (week_start, model_permaslug));
 CREATE TABLE IF NOT EXISTS markets (
   id INTEGER PRIMARY KEY, week_start TEXT NOT NULL,
-  kind TEXT NOT NULL CHECK (kind IN ('top_model','growth')),
+  kind TEXT NOT NULL CHECK (kind IN ('top_model','growth','top5')),
   model_permaslug TEXT, options_json TEXT,
   status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','resolved')),
   resolved_value TEXT);

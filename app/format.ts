@@ -30,10 +30,14 @@ export function compact(n: number): string {
 }
 
 export const title = (m: { kind: string; model_permaslug: string | null }, names?: Names) =>
-  m.kind === "top_model" ? "Top model by tokens" : `Growth: ${displayName(m.model_permaslug!, [], names)}`;
+  m.kind === "top_model" ? "Top model by tokens" : m.kind === "top5" ? "Top 5 slate" : `Growth: ${displayName(m.model_permaslug!, [], names)}`;
 
 export const median = (xs: number[]) => {
   if (!xs.length) return null;
   const s = [...xs].sort((a, b) => a - b);
   return s.length % 2 ? s[s.length >> 1]! : (s[s.length / 2 - 1]! + s[s.length / 2]!) / 2;
 };
+
+/** top5 JSON array -> "1. X · 2. Y · ..." */
+export const slate = (json: string, options: string[], names?: Names) =>
+  (JSON.parse(json) as string[]).map((s, i) => `${i + 1}. ${displayName(s, options, names)}`).join(" · ");

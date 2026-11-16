@@ -1,7 +1,7 @@
 import { Form, Link } from "react-router";
 import type { Route } from "./+types/markets";
 import { listMarkets, weeks, type MarketRow } from "../queries.server.ts";
-import { displayName, fmt, title } from "../format.ts";
+import { displayName, fmt, slate, title } from "../format.ts";
 import { useNames } from "../root.tsx";
 
 export function loader({ request }: Route.LoaderArgs) {
@@ -17,8 +17,8 @@ function Market({ m }: { m: MarketRow }) {
     <li>
       <Link to={`/markets/${m.id}`}>{title(m, names)}</Link>{" "}
       <span className="muted">
-        {m.kind === "top_model" ? `${JSON.parse(m.options_json!).length} options` : "predict WoW % change"} · {fmt(m.total_staked)} staked · {m.bet_count} bets
-        {m.status === "open" ? ` · closes ${m.week_start} 00:00 UTC` : ` · resolved: ${m.kind === "growth" && m.resolved_value ? `${Number(m.resolved_value).toFixed(1)}%` : (m.resolved_value ? displayName(m.resolved_value, [], names) : "n/a")}`}
+        {m.kind === "top_model" ? `${JSON.parse(m.options_json!).length} options` : m.kind === "top5" ? "rank the top 5" : "predict WoW % change"} · {fmt(m.total_staked)} staked · {m.bet_count} bets
+        {m.status === "open" ? ` · closes ${m.week_start} 00:00 UTC` : ` · resolved: ${m.kind === "growth" && m.resolved_value ? `${Number(m.resolved_value).toFixed(1)}%` : (m.resolved_value ? (m.kind === "top5" ? slate(m.resolved_value, [], names) : displayName(m.resolved_value, [], names)) : "n/a")}`}
       </span>
     </li>
   );

@@ -6,7 +6,7 @@ const rows = <T,>(sql: string, ...args: (string | number)[]) =>
 export interface MarketRow {
   id: number;
   week_start: string;
-  kind: "top_model" | "growth";
+  kind: "top_model" | "growth" | "top5";
   model_permaslug: string | null;
   options_json: string | null;
   status: "open" | "resolved";

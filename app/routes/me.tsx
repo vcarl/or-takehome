@@ -21,7 +21,7 @@ export default function Me({ loaderData: { bets, ledger } }: Route.ComponentProp
           <tbody>
             {bets.map((b) => (
               <tr key={b.id}>
-                <td><Link to={`/markets/${b.market_id}`}>{b.week_start} {b.kind === "top_model" ? "top model" : displayName(b.model_permaslug!, [], names)}</Link></td>
+                <td><Link to={`/markets/${b.market_id}`}>{b.week_start} {b.kind === "top_model" ? "top model" : b.kind === "top5" ? "top 5 slate" : displayName(b.model_permaslug!, [], names)}</Link></td>
                 <td>{b.status}</td>
                 <td>{b.choice_text ?? `${b.predicted_pct}%`}</td>
                 <td>{fmt(b.stake)}</td>

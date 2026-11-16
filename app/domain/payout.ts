@@ -31,3 +31,9 @@ export function growthMultiplier(predictedPct: number, actualPct: number): numbe
   return 3 * Math.max(0, 1 - Math.abs(predictedPct - actualPct) / 25);
 }
 
+
+/** top5: per predicted slot 1 pt if exact position, 0.4 if in the actual top 5 elsewhere; 3 × points / 5. */
+export function slateMultiplier(predicted: string[], actual: string[]): number {
+  const pts = predicted.reduce((s, m, i) => s + (actual[i] === m ? 1 : actual.includes(m) ? 0.4 : 0), 0);
+  return (3 * pts) / 5;
+}
