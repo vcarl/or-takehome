@@ -32,5 +32,5 @@ Brief-driven minimum for a few-hour, local-only take-home:
 - Karma and winnings are **append-only ledgers**; balances are sums.
 - Skipped on purpose: Postgres + Kanel/Effect/HttpApi generation chain, Zero sync, Nx, deploy.
 - Auth MVP: username-only login → cookie session. Stretch: OpenRouter OAuth PKCE.
-- `./dev` launcher: `./dev` (serve), `./dev snapshot [--fixture path]`, `./dev open-week`, `./dev resolve`, `./dev seed-demo [fixture]` (fresh DB only; resolves past weeks, opens current/next, creates no users or bets), `./dev test`.
+- `./dev` launcher: `./dev` (serve), `./dev snapshot [--fixture path]`, `./dev open-week`, `./dev resolve`, `./dev seed-demo [fixture]` (fresh DB only; resolves past weeks, opens current/next, creates no users or bets; `--players` adds scripted `demo-*` players betting every market (10 each) so the skill leaderboard runs on real outcomes), `./dev test`.
 - DB init is explicit (`./dev` migrates on start idempotently); seeding is opt-in, never automatic.

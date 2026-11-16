@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { getDb } from "../app/db.server.ts";
 import { addDays, weekStart } from "../app/domain/week.ts";
 import { openWeek, resolveReady } from "../app/markets.server.ts";
+import { seedPlayers } from "../app/seedPlayers.server.ts";
 import { fetchDataset, fetchModelNames, parseDataset, parseModelNames, storeModelNames, storeSnapshot } from "../app/rankings.server.ts";
 
 try {
@@ -23,7 +24,7 @@ async function takeSnapshot(fixture?: string) {
 
 const loadNamesFixture = () => parseModelNames(JSON.parse(readFileSync(resolve(import.meta.dirname, "../fixtures/models.json"), "utf8")));
 
-function seedDemo(fixture: string) {
+function seedDemo(fixture: string, players = false) {
   if (db.prepare("SELECT 1 FROM markets LIMIT 1").get()) throw new Error("seed-demo needs a fresh DB (markets already exist); delete data/ first");
   const ds = parseDataset(JSON.parse(readFileSync(resolve(fixture), "utf8")));
   storeSnapshot(ds, `fixture:${fixture}`);
@@ -33,6 +34,7 @@ function seedDemo(fixture: string) {
   const demoNow = new Date(ds.asOf);
   const cur = weekStart(demoNow);
   const w = (n: number) => addDays(cur, n * 7);
+  if (players) return seedPlayers(demoNow);
   // No users or bets: the demo shows real outcomes only; bets come from real logins.
   for (const wk of [w(-3), w(-2), w(-1), w(0), w(1)]) openWeek(wk);
   resolveReady();
@@ -57,9 +59,9 @@ switch (cmd) {
     console.log(`resolved ${resolveReady()} markets`);
     break;
   case "seed-demo":
-    seedDemo(args[0] ?? resolve(import.meta.dirname, "../fixtures/rankings-weekly.json"));
+    seedDemo(args.find((a) => !a.startsWith("--")) ?? resolve(import.meta.dirname, "../fixtures/rankings-weekly.json"), args.includes("--players"));
     break;
   default:
-    console.error("usage: dev [snapshot [--fixture path] | open-week [YYYY-MM-DD] | resolve | seed-demo | test]");
+    console.error("usage: dev [snapshot [--fixture path] | open-week [YYYY-MM-DD] | resolve | seed-demo [--players] | test]");
     process.exit(2);
 }
