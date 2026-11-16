@@ -5,12 +5,15 @@ Time-boxed take-home (devrel/community role). MVP first; real auth is a stretch.
 ## Product
 
 - **Week** = Monday 00:00 UTC → next Monday 00:00 UTC. Markets for week W are created from week W-1's data and **close for betting when W starts**. They resolve once a snapshot covers all 7 days of W.
-- **Karma** = spend currency. Every user starts with 1000; +100 weekly grant (claimed lazily, once per ISO week, on any authenticated request). Staking burns karma — win or lose, it's spent.
-- **Winnings** = separate, monotonically increasing score, minted at resolution as `stake × multiplier`. Bigger stake → bigger winnings. Public leaderboard ranks by winnings.
+- **Karma** = spend currency. Every user starts with 1000; +100 weekly grant (claimed lazily, once per ISO week, on any authenticated request). Staking burns karma, win or lose. Stake is an integer 1-100 (default 10). One prediction per user per market (UNIQUE + friendly error).
+- **Scoring is skill vs the house.** Each market stores a house forecast (`markets.house_json`) when `openWeek` creates it. No crowd reference, no blind/open rounds. Skill is clamped to [-1, 2]; multiplier = `max(0, 0.9 + skill)`; winnings = `stake × multiplier`, minted at resolution and stored per bet as `bets.skill`. A copy of the house scores skill 0 (x0.9).
+- **Winnings** = separate, monotonically increasing score. **Leaderboard** ranks by `skill_score = Σ skill / √(n + 9)` over resolved bets (n = resolved bet count), showing Skill, Winnings, Predictions.
 - **Market types** (per week):
-  - `growth` — numeric, one per model in last week's top 8: predict week-over-week % change in total tokens. Multiplier = `3 × max(0, 1 − |predicted − actual| / 25)` (percentage points).
-  - `top5` — ranked slate, one per week, options = last week's top 10 (submitted from the home-page hero): bet = 5 distinct options in order (JSON array in `bets.choice_text`). Per slot 1 pt if exact position, 0.4 if in the actual top 5 elsewhere; multiplier = `3 × points / 5`. Only created when there are ≥5 options. `top_model` (parimutuel #1 pick) was retired in favor of this; DBs that predate either change must be recreated (kind CHECK has no migration).
-- All payout math lives in one pure module (`app/domain/payout.ts`) with Vitest coverage.
+  - `growth` — one per model in last week's top 8. Bet form fields: `pct` (median, week-over-week %), `low`, `high` (80% range; if missing, house range shifted to the median; require low ≤ pct ≤ high). House: median 0, range = pooled p10/p90 of WoW growth of the top-8 over the trailing 12 complete weeks, rounded to 5pp (±40 until ≥16 observations). Skill = `(wis_house − wis_you) / 15`, `wis(m,l,u,a) = (|a−m|/2 + 0.1(u−l) + max(0,l−a) + max(0,a−u)) / 1.5` on values winsorised to ±100.
+  - `top5` — ranked slate, one per week, options = last week's top 10 (rank order), only created with ≥5 options. Bet fields: `slot1..slot5` (distinct options) and `conf1..conf5` in `lean|likely|lock` = 0.3/0.6/0.9 (default lean). House: last week's top 5 in order, all lean. Points = `Σ_i 0.4·1{pick in actual top5} + 0.6·X(c_i, exact)`, `X(c,hit) = (1 + 2·(hit ? c : (1−c)/9) − c² − (1−c)²/9) / 2`; skill = `0.6 × (pts_you − pts_house)`.
+  - Form fields overall: `market`, `stake`, plus the per-type fields above. Markets close for betting when week W starts.
+- **Crowd aggregates** (growth: median of medians/low/high; slate: Borda consensus 5..1, inclusion share, #1 share; plus count) are shown only after the viewer predicted in that market or once it is closed/resolved; before that loaders return `crowd: null` and the count. Individual bets on the market page are hidden the same way.
+- All payout math lives in one pure module (`app/domain/payout.ts`) with Vitest coverage. No migrations: DBs created before this change (new `markets.house_json`, `bets.low/high/conf_json/skill`, bets UNIQUE) must be recreated.
 
 ## Data source
 

@@ -4,11 +4,13 @@ import type { Route } from "./+types/home";
 import { isCovered, placeBet } from "../markets.server.ts";
 import { getUser, requireUser } from "../session.server.ts";
 import { modelNames } from "../rankings.server.ts";
-import { listMarkets, marketBets, usageByModel } from "../queries.server.ts";
-import { compact, displayName, median } from "../format.ts";
+import { crowdFor, listMarkets, marketBets, usageByModel } from "../queries.server.ts";
+import { compact, displayName } from "../format.ts";
+import type { Conf } from "../domain/payout.ts";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const now = Date.now();
+  const user = await getUser(request);
   const all = listMarkets();
   // Bettable week: soonest open week that hasn't started yet.
   const week = all
@@ -24,6 +26,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const slugs = open.flatMap((m) => (m.model_permaslug ? [m.model_permaslug] : []));
   const cards = open.map((m) => {
     const bets = marketBets(m.id);
+    const { crowd } = crowdFor(m, bets, user?.id ?? null, now); // null until the viewer has predicted
     if (m.kind === "top5") {
       // Options are last week's top 10, already in rank order.
       const options: string[] = JSON.parse(m.options_json ?? "[]");
@@ -32,6 +35,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         kind: "slate" as const,
         m,
         betCount: bets.length,
+        crowd,
         options: options.map((o) => ({ slug: o, name: displayName(o, options, names), tokens: lastOf(o) })),
       };
     }
@@ -47,7 +51,8 @@ export async function loader({ request }: Route.LoaderArgs) {
       last,
       wow: last !== null && prev ? ((last - prev) / prev) * 100 : null,
       betCount: bets.length,
-      median: median(bets.map((b) => b.predicted_pct).filter((p): p is number => p !== null)),
+      crowd,
+      median: crowd?.kind === "growth" ? crowd.median : null,
     };
   });
   const settled = [...new Set(all.filter((m) => m.status === "resolved").map((m) => m.week_start))].map((w) => {
@@ -59,7 +64,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   // One shared log-scale y-axis and week axis so sparklines compare across models.
   const all_ = cards.flatMap((c) => (c.kind === "growth" ? c.series.filter((v) => v > 0) : []));
   const scale = { lo: Math.min(...all_), hi: Math.max(...all_), span: Math.max(2, ...cards.map((c) => (c.kind === "growth" ? c.series.length : 0))) };
-  return { week, closes, cards, settled, scale, user: await getUser(request) };
+  return { week, closes, cards, settled, scale, user };
 }
 
 /** Hero form: submit a top5 slate without leaving the page. */
@@ -68,8 +73,9 @@ export async function action({ request }: Route.ActionArgs) {
   const f = await request.formData();
   const slate = [1, 2, 3, 4, 5].map((i) => String(f.get(`slot${i}`) ?? ""));
   if (slate.some((s) => !s)) return { error: "Fill all 5 slots" };
+  const conf = [1, 2, 3, 4, 5].map((i) => String(f.get(`conf${i}`) || "lean") as Conf);
   try {
-    placeBet(user.id, Number(f.get("market")), Number(f.get("stake")), slate);
+    placeBet(user.id, Number(f.get("market")), Number(f.get("stake")), { slate, conf });
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Prediction failed" };
   }
@@ -145,7 +151,7 @@ function SlateHero({ marketId, options, betCount, karma, result }: { marketId: n
             <Link className="btn" to="/login">Log in to rank</Link>
           ) : (
             <>
-              <label>Stake <input name="stake" type="number" min="1" step="1" defaultValue={50} required /> <span className="muted">of {karma.toLocaleString()} karma</span></label>
+              <label>Stake <input name="stake" type="number" min="1" step="1" defaultValue={10} required /> <span className="muted">of {karma.toLocaleString()} karma</span></label>
               <button className="btn" type="submit" disabled={left > 0}>{left > 0 ? `Pick ${left} more` : "Submit slate"}</button>
             </>
           )}
@@ -193,7 +199,7 @@ export default function Home({ loaderData: { week, closes, cards, settled, scale
                 )}
               </span>
               {c.median !== null && <span className="muted">Crowd: {`${c.median > 0 ? "+" : ""}${c.median.toFixed(0)}%`} · {c.betCount} predictions</span>}
-              <Link className="btn" to={`/markets/${c.m.id}`}>{c.median === null ? "Make the first prediction" : "Predict"}</Link>
+              <Link className="btn" to={`/markets/${c.m.id}`}>{c.betCount === 0 ? "Make the first prediction" : "Predict"}</Link>
             </section>
           ),
         )}

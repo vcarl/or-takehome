@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
+// No migrations: DBs from before the skill-scoring change (markets.house_json, bets.low/high/conf_json/skill) must be recreated.
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);
@@ -19,12 +20,13 @@ CREATE TABLE IF NOT EXISTS markets (
   kind TEXT NOT NULL CHECK (kind IN ('growth','top5')),
   model_permaslug TEXT, options_json TEXT,
   status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','resolved')),
-  resolved_value TEXT);
+  resolved_value TEXT, house_json TEXT);
 CREATE UNIQUE INDEX IF NOT EXISTS markets_uniq ON markets(week_start, kind, coalesce(model_permaslug, ''));
 CREATE TABLE IF NOT EXISTS bets (
   id INTEGER PRIMARY KEY, market_id INTEGER NOT NULL REFERENCES markets(id),
-  user_id INTEGER NOT NULL REFERENCES users(id), stake INTEGER NOT NULL CHECK (stake > 0),
-  choice_text TEXT, predicted_pct REAL, created_at TEXT NOT NULL);
+  user_id INTEGER NOT NULL REFERENCES users(id), stake INTEGER NOT NULL CHECK (stake BETWEEN 1 AND 100),
+  choice_text TEXT, predicted_pct REAL, low REAL, high REAL, conf_json TEXT, skill REAL,
+  created_at TEXT NOT NULL, UNIQUE (market_id, user_id));
 CREATE TABLE IF NOT EXISTS karma_ledger (
   id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), delta INTEGER NOT NULL,
   reason TEXT NOT NULL, ref TEXT, week TEXT, created_at TEXT NOT NULL);
