@@ -156,7 +156,7 @@ function SlateHero({ marketId, options, betCount, karma, result }: { marketId: n
                 {s && <span className="grip">⠿</span>}
               </span>
               <button type="button" className={`slot${s ? " filled" : ""}`} onClick={() => s && clear(i)} aria-label={s ? `Slot ${i + 1}: ${byslug.get(s)?.name}. Tap to clear, or drag to reorder` : `Slot ${i + 1}, empty`}>
-                <span className="slot-name">{s ? byslug.get(s)?.name : ""}</span>
+                <span className="slot-name" title={s ? byslug.get(s)?.name : undefined}>{s ? byslug.get(s)?.name : ""}</span>
               </button>
               {s && (
                 <button type="button" className={`chip chip-${conf[i]}`} onClick={() => cycle(i)} aria-label={`Confidence for slot ${i + 1}: ${CONF_LABEL[conf[i]!]}. Tap to change`}>
