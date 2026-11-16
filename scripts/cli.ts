@@ -3,13 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { getDb } from "../app/db.server.ts";
 import { addDays, weekStart } from "../app/domain/week.ts";
-import {
-  ensureWeeklyGrant,
-  getOrCreateUser,
-  openWeek,
-  placeBet,
-  resolveReady,
-} from "../app/markets.server.ts";
+import { openWeek, resolveReady } from "../app/markets.server.ts";
 import { fetchDataset, parseDataset, storeSnapshot } from "../app/rankings.server.ts";
 
 try {
@@ -34,36 +28,10 @@ function seedDemo(fixture: string) {
   const demoNow = new Date(ds.asOf);
   const cur = weekStart(demoNow);
   const w = (n: number) => addDays(cur, n * 7);
-  const users = ["alice", "bob", "carol", "dave"];
-  const ids = users.map((u) => getOrCreateUser(u, new Date(`${w(-4)}T00:00:00Z`)));
-  const marketsFor = (w: string) =>
-    db.prepare("SELECT * FROM markets WHERE week_start = ? ORDER BY id").all(w) as unknown as {
-      id: number; kind: string; options_json: string | null; model_permaslug: string | null;
-    }[];
-  let k = 0;
-  // Weeks to bet on, each before it starts, using an injected clock instead of bypassing validation.
-  for (const wk of [w(-3), w(-2), w(-1), w(0), w(1)]) {
-    openWeek(wk);
-    const clock = new Date(Math.min(Date.parse(`${addDays(wk, -1)}T12:00:00Z`), demoNow.getTime()));
-    for (const uid of ids) ensureWeeklyGrant(uid, clock);
-    for (const m of marketsFor(wk)) {
-      ids.forEach((uid, ui) => {
-        k++;
-        if ((k + ui) % 3 === 0) return; // not everyone bets everywhere
-        const stake = 5 + ((k * 7) % 30);
-        try {
-          if (m.kind === "top_model") {
-            const opts = JSON.parse(m.options_json!) as string[];
-            placeBet(uid, m.id, stake, opts[(k + ui) % 3 === 1 ? 0 : (k * 7 + ui) % 4], clock);
-          } else placeBet(uid, m.id, stake, ((k * 13 + ui * 7) % 40) - 15, clock);
-        } catch (e) {
-          if (!String(e).includes("insufficient")) throw e;
-        }
-      });
-    }
-    resolveReady();
-  }
-  console.log(`seeded demo users: ${users.join(", ")}; resolved weeks ${w(-3)}..${w(-1)}; locked ${w(0)}; open ${w(1)}`);
+  // No users or bets: the demo shows real outcomes only; bets come from real logins.
+  for (const wk of [w(-3), w(-2), w(-1), w(0), w(1)]) openWeek(wk);
+  resolveReady();
+  console.log(`seeded markets: resolved weeks ${w(-3)}..${w(-1)}; locked ${w(0)}; open ${w(1)}`);
 }
 
 switch (cmd) {
