@@ -14,12 +14,12 @@ Time-boxed take-home (devrel/community role). MVP first; real auth is a stretch.
 
 ## Data source
 
-- Official dataset API: `GET https://openrouter.ai/api/v1/datasets/rankings-daily?period=week&start_date=…&end_date=…` with `Authorization: Bearer $OPENROUTER_API_KEY` (key in gitignored `.env`, loaded by the CLI only, never printed/committed/fixtured). Limits: 30/min, 500/day, so one request per `./dev snapshot` (default window: last 12 weeks).
+- Official dataset API: `GET https://openrouter.ai/api/v1/datasets/rankings-daily?period=week&start_date=…&end_date=…` with `Authorization: Bearer $OPENROUTER_API_KEY` (key in gitignored `.env`, loaded by the CLI only, never printed/committed/fixtured). Limits: 30/min, 500/day, so one rankings request per `./dev snapshot` (default window: last 12 weeks), plus one `GET /api/v1/models` for display names (`model_names` table, canonical_slug -> name).
 - Response `{data:[{date, model_permaslug, total_tokens:"<decimal string>"}], meta:{as_of, start_date, end_date, version}}`. `period=week` buckets by ISO week start, so `date` IS `week_start`. Up to 50 models per bucket plus a reserved `other` long-tail row (stored, excluded from markets/options). `:variant` suffixes are stripped and summed into the base permaslug. There is no prompt/completion split.
 - Stored in `weekly_usage(week_start, model_permaslug, total_tokens, snapshot_id)` (latest snapshot wins per week+model); `snapshots.as_of` is kept per fetch.
 - **Partial-week rule:** the trailing bucket is the in-progress week. A week is resolvable only when `week_start + 7d <= date(as_of) + 1d`. `openWeek(W)` builds from the most recent complete prior week.
 - **License CC BY 4.0.** Show the citation `Source: OpenRouter (openrouter.ai/rankings), as of {as_of}.` (app footer, from `latestAsOf()`).
-- `fixtures/rankings-weekly.json` is one recorded live response (no key) so tests/`seed-demo` run offline: `./dev snapshot --fixture fixtures/rankings-weekly.json`. `seed-demo` uses only real data, with the fixture's `as_of` as the demo clock.
+- `fixtures/rankings-weekly.json` (and `fixtures/models.json` for names) are recorded live responses (no key) so tests/`seed-demo` run offline: `./dev snapshot --fixture fixtures/rankings-weekly.json`. `seed-demo` uses only real data, with the fixture's `as_of` as the demo clock.
 
 ## Stack (deliberate deviation from the house blessed stack)
 
@@ -29,5 +29,5 @@ Brief-driven minimum for a few-hour, local-only take-home:
 - Karma and winnings are **append-only ledgers**; balances are sums.
 - Skipped on purpose: Postgres + Kanel/Effect/HttpApi generation chain, Zero sync, Nx, deploy.
 - Auth MVP: username-only login → cookie session. Stretch: OpenRouter OAuth PKCE.
-- `./dev` launcher: `./dev` (serve), `./dev snapshot [--fixture path]`, `./dev open-week`, `./dev resolve`, `./dev seed-demo`, `./dev test`.
+- `./dev` launcher: `./dev` (serve), `./dev snapshot [--fixture path]`, `./dev open-week`, `./dev resolve`, `./dev seed-demo [fixture]` (fresh DB only; resolves past weeks, opens current/next, creates no users or bets), `./dev test`.
 - DB init is explicit (`./dev` migrates on start idempotently); seeding is opt-in, never automatic.
