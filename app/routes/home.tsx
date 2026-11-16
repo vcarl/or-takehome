@@ -4,13 +4,7 @@ import { isCovered, placeBet } from "../markets.server.ts";
 import { getUser, requireUser } from "../session.server.ts";
 import { modelNames } from "../rankings.server.ts";
 import { listMarkets, marketBets, usageByModel } from "../queries.server.ts";
-import { compact, displayName } from "../format.ts";
-
-const median = (xs: number[]) => {
-  if (!xs.length) return null;
-  const s = [...xs].sort((a, b) => a - b);
-  return s.length % 2 ? s[s.length >> 1]! : (s[s.length / 2 - 1]! + s[s.length / 2]!) / 2;
-};
+import { compact, displayName, median } from "../format.ts";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const now = Date.now();
@@ -65,7 +59,6 @@ export async function loader({ request }: Route.LoaderArgs) {
     const top = ms.find((m) => m.kind === "top_model")?.resolved_value ?? null;
     return { week: w, top: top && displayName(top, [], names), topSlug: top, growth: ms.filter((m) => m.kind === "growth").length };
   });
-  // One shared y-scale (0..max) so sparklines compare across models.
   // One shared log-scale y-axis and week axis so sparklines compare across models.
   const all_ = cards.flatMap((c) => (c.kind === "growth" ? c.series.filter((v) => v > 0) : []));
   const scale = { lo: Math.min(...all_), hi: Math.max(...all_), span: Math.max(2, ...cards.map((c) => (c.kind === "growth" ? c.series.length : 0))) };

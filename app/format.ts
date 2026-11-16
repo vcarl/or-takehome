@@ -31,3 +31,9 @@ export function compact(n: number): string {
 
 export const title = (m: { kind: string; model_permaslug: string | null }, names?: Names) =>
   m.kind === "top_model" ? "Top model by tokens" : `Growth: ${displayName(m.model_permaslug!, [], names)}`;
+
+export const median = (xs: number[]) => {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length % 2 ? s[s.length >> 1]! : (s[s.length / 2 - 1]! + s[s.length / 2]!) / 2;
+};

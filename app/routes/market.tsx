@@ -3,14 +3,8 @@ import type { Route } from "./+types/market";
 import { placeBet } from "../markets.server.ts";
 import { getMarket, marketBets } from "../queries.server.ts";
 import { getUser, requireUser } from "../session.server.ts";
-import { displayName, fmt, title } from "../format.ts";
+import { displayName, fmt, median, title } from "../format.ts";
 import { useNames } from "../root.tsx";
-
-const median = (xs: number[]) => {
-  if (!xs.length) return null;
-  const s = [...xs].sort((a, b) => a - b);
-  return s.length % 2 ? s[s.length >> 1]! : (s[s.length / 2 - 1]! + s[s.length / 2]!) / 2;
-};
 
 export async function loader({ request, params }: Route.LoaderArgs) {
   const market = getMarket(Number(params.id));
