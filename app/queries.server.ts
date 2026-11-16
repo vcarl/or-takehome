@@ -1,4 +1,5 @@
 import { getDb } from "./db.server.ts";
+import { median } from "./format.ts";
 
 const rows = <T,>(sql: string, ...args: (string | number)[]) =>
   getDb().prepare(sql).all(...args) as unknown as T[];
@@ -11,6 +12,7 @@ export interface MarketRow {
   options_json: string | null;
   status: "open" | "resolved";
   resolved_value: string | null;
+  house_json: string | null;
   total_staked: number;
   bet_count: number;
 }
@@ -25,10 +27,15 @@ export const getMarket = (id: number) => rows<MarketRow>(`${MARKET_SQL} WHERE m.
 export interface BetRow {
   id: number;
   market_id: number;
+  user_id: number;
   username: string;
   stake: number;
   choice_text: string | null;
   predicted_pct: number | null;
+  low: number | null;
+  high: number | null;
+  conf_json: string | null;
+  skill: number | null;
   created_at: string;
   winnings: number | null;
 }
@@ -54,13 +61,55 @@ export const ledger = (userId: number) =>
     userId,
   );
 
+/** skill_score = sum(skill) / sqrt(n + 9) over resolved bets (n = resolved bet count). */
 export const leaderboard = () =>
-  rows<{ username: string; winnings: number; bets: number }>(
+  rows<{ username: string; skill_score: number; winnings: number; predictions: number }>(
     `SELECT u.username,
+       COALESCE((SELECT SUM(skill) FROM bets WHERE user_id = u.id), 0) AS skill_sum,
+       (SELECT COUNT(skill) FROM bets WHERE user_id = u.id) AS n,
        COALESCE((SELECT SUM(amount) FROM winnings_ledger WHERE user_id = u.id), 0) AS winnings,
-       (SELECT COUNT(*) FROM bets WHERE user_id = u.id) AS bets
-     FROM users u ORDER BY winnings DESC, u.username`,
-  );
+       (SELECT COUNT(*) FROM bets WHERE user_id = u.id) AS predictions
+     FROM users u`,
+  )
+    .map((r: any) => ({ username: r.username, skill_score: r.skill_sum / Math.sqrt(r.n + 9), winnings: r.winnings, predictions: r.predictions }))
+    .sort((a, b) => b.skill_score - a.skill_score || b.winnings - a.winnings || a.username.localeCompare(b.username));
+
+export type Crowd =
+  | { kind: "growth"; median: number | null; low: number | null; high: number | null }
+  | { kind: "top5"; order: string[]; models: { model: string; borda: number; inclusion: number; first: number }[] };
+
+/** Crowd aggregates from a market's bets. Pure; gating lives in `crowdFor`. */
+export function crowdOf(kind: string, bets: BetRow[]): Crowd {
+  if (kind === "growth") {
+    const nums = (f: (b: BetRow) => number | null) => bets.map(f).filter((x): x is number => x !== null);
+    return { kind: "growth", median: median(nums((b) => b.predicted_pct)), low: median(nums((b) => b.low)), high: median(nums((b) => b.high)) };
+  }
+  const acc = new Map<string, { borda: number; incl: number; first: number }>();
+  for (const b of bets) {
+    (JSON.parse(b.choice_text!) as string[]).forEach((m, i) => {
+      const a = acc.get(m) ?? { borda: 0, incl: 0, first: 0 };
+      a.borda += 5 - i;
+      a.incl++;
+      if (i === 0) a.first++;
+      acc.set(m, a);
+    });
+  }
+  const n = bets.length || 1;
+  const models = [...acc]
+    .map(([model, a]) => ({ model, borda: a.borda, inclusion: a.incl / n, first: a.first / n }))
+    .sort((x, y) => y.borda - x.borda || x.model.localeCompare(y.model));
+  return { kind: "top5", order: models.slice(0, 5).map((m) => m.model), models };
+}
+
+/**
+ * Crowd view for a market, hidden (crowd: null, count only) until the viewer has predicted in it or the market
+ * is closed (week started) or resolved, so nobody can copy the crowd while betting is live.
+ */
+export function crowdFor(m: { id: number; kind: string; status: string; week_start: string }, bets: BetRow[], userId: number | null, now = Date.now()) {
+  const closed = m.status !== "open" || now >= Date.parse(`${m.week_start}T00:00:00Z`);
+  const revealed = closed || (userId !== null && bets.some((b) => b.user_id === userId));
+  return { count: bets.length, crowd: revealed ? crowdOf(m.kind, bets) : null };
+}
 
 /** Per-model weekly totals, oldest first, excluding the long-tail "other" row. */
 export function usageByModel(): Map<string, { week: string; tokens: number }[]> {
