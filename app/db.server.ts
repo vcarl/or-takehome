@@ -37,15 +37,13 @@ CREATE TABLE IF NOT EXISTS winnings_ledger (
 const dbPath = () => resolve(process.env.DATABASE_PATH ?? resolve(import.meta.dirname, "../data/app.sqlite3"));
 
 let db: DatabaseSync | undefined;
-let openedPath: string | undefined;
 
-/** Opens (and idempotently migrates) the DB. ":memory:" is honored for tests. */
+/** Opens (and idempotently migrates) the DB once per process; DATABASE_PATH is read on first call. ":memory:" is honored for tests. */
 export function getDb(): DatabaseSync {
+  if (db) return db;
   const path = process.env.DATABASE_PATH === ":memory:" ? ":memory:" : dbPath();
-  if (db && openedPath === path) return db;
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
   db = new DatabaseSync(path);
-  openedPath = path;
   db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
   db.exec(SCHEMA);
   return db;

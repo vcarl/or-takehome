@@ -3,7 +3,7 @@ import type { Route } from "./+types/market";
 import { placeBet } from "../markets.server.ts";
 import { getMarket, marketBets } from "../queries.server.ts";
 import { getUser, requireUser } from "../session.server.ts";
-import { displayName, fmt, median, slate, title } from "../format.ts";
+import { choiceLabel, displayName, fmt, median, resolvedLabel, title } from "../format.ts";
 import { useNames } from "../root.tsx";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
@@ -54,7 +54,7 @@ export default function MarketPage({ loaderData: { market: m, bets, options, sta
         Week of {m.week_start} · {m.status === "open" ? (open ? `bets close ${m.week_start} 00:00 UTC` : "betting closed") : "resolved"} · {fmt(m.total_staked)} staked · {m.bet_count} bets
       </p>
       {m.status === "resolved" && (
-        <p className="card"><strong>Result:</strong> {m.kind === "growth" && m.resolved_value ? `${Number(m.resolved_value).toFixed(2)}% growth` : (m.resolved_value ? (m.kind === "top5" ? slate(m.resolved_value, options, names) : displayName(m.resolved_value, [], names)) : "n/a")}</p>
+        <p className="card"><strong>Result:</strong> {resolvedLabel(m, names, options)}</p>
       )}
       <section className="card">
         <h2>How it pays</h2>
@@ -122,7 +122,7 @@ export default function MarketPage({ loaderData: { market: m, bets, options, sta
               {bets.map((b) => (
                 <tr key={b.id}>
                   <td>{b.username}</td>
-                  <td title={b.choice_text ?? undefined}>{b.choice_text ? (m.kind === "top5" ? slate(b.choice_text, options, names) : displayName(b.choice_text, options, names)) : `${b.predicted_pct}%`}</td>
+                  <td title={b.choice_text ?? undefined}>{choiceLabel(b, m.kind, names, options)}</td>
                   <td>{fmt(b.stake)}</td>
                   {m.status === "resolved" && <><td>{fmt((b.winnings ?? 0) / b.stake)}x</td><td>{fmt(b.winnings ?? 0)}</td></>}
                 </tr>

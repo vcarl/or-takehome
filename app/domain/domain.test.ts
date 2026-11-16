@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { growthMultiplier, growthPct, slateMultiplier, topModelMultiplier, topN, weeklyTotals } from "./payout.ts";
+import { growthMultiplier, growthPct, slateMultiplier, topModelMultiplier, topN } from "./payout.ts";
 import { isoWeekKey, weekStart } from "./week.ts";
 
 describe("week", () => {
@@ -16,17 +16,6 @@ describe("week", () => {
 });
 
 describe("payout", () => {
-  it("sums week totals, ignoring other weeks", () => {
-    const t = weeklyTotals(
-      [
-        { week: "2026-11-09", model: "a", tokens: 10 },
-        { week: "2026-11-16", model: "a", tokens: 100 },
-        { week: "2026-11-09", model: "b", tokens: 7 },
-      ],
-      "2026-11-09",
-    );
-    expect(topN(t, 1)).toEqual([["a", 10]]);
-  });
   it("growth pct and zero prior", () => {
     expect(growthPct(100, 150)).toBe(50);
     expect(growthPct(0, 10)).toBeNull();

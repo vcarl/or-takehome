@@ -41,3 +41,16 @@ export const median = (xs: number[]) => {
 /** top5 JSON array -> "1. X · 2. Y · ..." */
 export const slate = (json: string, options: string[], names?: Names) =>
   (JSON.parse(json) as string[]).map((s, i) => `${i + 1}. ${displayName(s, options, names)}`).join(" · ");
+
+/** A resolved market's outcome: growth %, top-5 slate, or the winning model. */
+export const resolvedLabel = (m: { kind: string; resolved_value: string | null }, names?: Names, options: string[] = []) =>
+  !m.resolved_value ? "n/a"
+  : m.kind === "growth" ? `${Number(m.resolved_value).toFixed(1)}%`
+  : m.kind === "top5" ? slate(m.resolved_value, options, names)
+  : displayName(m.resolved_value, options, names);
+
+/** A bet's pick: predicted %, top-5 slate, or a model. */
+export const choiceLabel = (b: { choice_text: string | null; predicted_pct: number | null }, kind: string, names?: Names, options: string[] = []) =>
+  !b.choice_text ? `${b.predicted_pct}%`
+  : kind === "top5" ? slate(b.choice_text, options, names)
+  : displayName(b.choice_text, options, names);

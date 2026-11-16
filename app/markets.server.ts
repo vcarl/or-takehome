@@ -1,42 +1,20 @@
 import { getDb, tx } from "./db.server.ts";
-import {
-  growthMultiplier,
-  growthPct,
-  slateMultiplier,
-  topModelMultiplier,
-  topN,
-  weeklyTotals,
-  type WeeklyRow,
-} from "./domain/payout.ts";
+import { growthMultiplier, growthPct, slateMultiplier, topModelMultiplier, topN } from "./domain/payout.ts";
 import { addDays, isoWeekKey } from "./domain/week.ts";
+import type { MarketRow } from "./queries.server.ts";
+import { latestAsOf } from "./rankings.server.ts";
 
 const INITIAL_KARMA = 1000;
 const WEEKLY_GRANT = 100;
 
-interface Market {
-  id: number;
-  week_start: string;
-  kind: "top_model" | "growth" | "top5";
-  model_permaslug: string | null;
-  options_json: string | null;
-  status: "open" | "resolved";
-  resolved_value: string | null;
-}
+type Market = Omit<MarketRow, "total_staked" | "bet_count">;
 
-const num = (v: unknown) => Number(v);
-
-function weekRows(week: string): WeeklyRow[] {
-  return getDb()
-    .prepare(
-      `SELECT week_start AS week, model_permaslug AS model, total_tokens AS tokens
-       FROM weekly_usage WHERE week_start = ?`,
-    )
-    .all(week) as unknown as WeeklyRow[];
-}
-
-function totalsFor(week: string) {
-  // "other" is the API's aggregate long-tail row, not a model.
-  return weeklyTotals(weekRows(week).filter((r) => r.model !== "other"), week);
+/** model -> total tokens for `week`. "other" is the API's aggregate long-tail row, not a model. */
+function totalsFor(week: string): Map<string, number> {
+  const rows = getDb()
+    .prepare("SELECT model_permaslug AS m, total_tokens AS t FROM weekly_usage WHERE week_start = ? AND model_permaslug != 'other'")
+    .all(week);
+  return new Map(rows.map((r) => [String(r.m), Number(r.t)]));
 }
 
 /**
@@ -46,8 +24,8 @@ function totalsFor(week: string) {
 export function isCovered(week: string): boolean {
   const db = getDb();
   if (!db.prepare("SELECT 1 FROM weekly_usage WHERE week_start = ? LIMIT 1").get(week)) return false;
-  const asOf = db.prepare("SELECT as_of FROM snapshots ORDER BY id DESC LIMIT 1").get()?.as_of;
-  return !!asOf && addDays(week, 7) <= addDays(String(asOf).slice(0, 10), 1);
+  const asOf = latestAsOf();
+  return !!asOf && addDays(week, 7) <= addDays(asOf.slice(0, 10), 1);
 }
 
 /**
@@ -70,10 +48,10 @@ export function openWeek(week: string): number {
     const top10 = topN(prior, 10);
     if (top10.length) {
       const opts = JSON.stringify(top10.map(([m]) => m));
-      n += num(ins.run(week, "top_model", null, opts).changes);
-      if (top10.length >= 5) n += num(ins.run(week, "top5", null, opts).changes); // a slate needs 5 distinct options
+      n += Number(ins.run(week, "top_model", null, opts).changes);
+      if (top10.length >= 5) n += Number(ins.run(week, "top5", null, opts).changes); // a slate needs 5 distinct options
     }
-    for (const [m, t] of topN(prior, 8)) if (t > 0) n += num(ins.run(week, "growth", m, null).changes);
+    for (const [m, t] of topN(prior, 8)) if (t > 0) n += Number(ins.run(week, "growth", m, null).changes);
     return n;
   });
 }
@@ -81,9 +59,9 @@ export function openWeek(week: string): number {
 export function getOrCreateUser(username: string, now = new Date()): number {
   const db = getDb();
   const row = db.prepare("SELECT id FROM users WHERE username = ?").get(username);
-  if (row) return num(row.id);
+  if (row) return Number(row.id);
   return tx(() => {
-    const id = num(
+    const id = Number(
       db.prepare("INSERT INTO users (username, created_at) VALUES (?, ?)").run(username, now.toISOString())
         .lastInsertRowid,
     );
@@ -104,15 +82,15 @@ export function ensureWeeklyGrant(userId: number, now = new Date()): boolean {
        VALUES (?, ?, 'weekly_grant', ?, ?)`,
     )
     .run(userId, WEEKLY_GRANT, isoWeekKey(now), now.toISOString());
-  return num(r.changes) === 1;
+  return Number(r.changes) === 1;
 }
 
 export function karmaBalance(userId: number): number {
-  return num(getDb().prepare("SELECT COALESCE(SUM(delta), 0) AS b FROM karma_ledger WHERE user_id = ?").get(userId)?.b);
+  return Number(getDb().prepare("SELECT COALESCE(SUM(delta), 0) AS b FROM karma_ledger WHERE user_id = ?").get(userId)?.b);
 }
 
 export function winningsTotal(userId: number): number {
-  return num(
+  return Number(
     getDb().prepare("SELECT COALESCE(SUM(amount), 0) AS b FROM winnings_ledger WHERE user_id = ?").get(userId)?.b,
   );
 }
@@ -151,7 +129,7 @@ export function placeBet(
       if (typeof choice !== "number" || !Number.isFinite(choice)) throw new Error("prediction must be a number");
       pct = choice;
     }
-    const id = num(
+    const id = Number(
       db
         .prepare(
           "INSERT INTO bets (market_id, user_id, stake, choice_text, predicted_pct, created_at) VALUES (?,?,?,?,?,?)",

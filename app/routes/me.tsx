@@ -2,7 +2,7 @@ import { Link } from "react-router";
 import type { Route } from "./+types/me";
 import { ledger, userBets } from "../queries.server.ts";
 import { requireUser } from "../session.server.ts";
-import { displayName, fmt } from "../format.ts";
+import { choiceLabel, fmt, title } from "../format.ts";
 import { useNames } from "../root.tsx";
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -21,9 +21,9 @@ export default function Me({ loaderData: { bets, ledger } }: Route.ComponentProp
           <tbody>
             {bets.map((b) => (
               <tr key={b.id}>
-                <td><Link to={`/markets/${b.market_id}`}>{b.week_start} {b.kind === "top_model" ? "top model" : b.kind === "top5" ? "top 5 slate" : displayName(b.model_permaslug!, [], names)}</Link></td>
+                <td><Link to={`/markets/${b.market_id}`}>{b.week_start} {title(b, names)}</Link></td>
                 <td>{b.status}</td>
-                <td>{b.choice_text ?? `${b.predicted_pct}%`}</td>
+                <td>{choiceLabel(b, b.kind, names)}</td>
                 <td>{fmt(b.stake)}</td>
                 <td>{b.status === "resolved" ? `${fmt((b.winnings ?? 0) / b.stake)}x` : "-"}</td>
                 <td>{b.status === "resolved" ? fmt(b.winnings ?? 0) : "-"}</td>
