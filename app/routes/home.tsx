@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Form, Link } from "react-router";
 import type { Route } from "./+types/home";
 import { isCovered, placeBet } from "../markets.server.ts";
@@ -19,24 +20,20 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const usage = usageByModel();
   const names = modelNames();
-  const open = all.filter((m) => m.week_start === week && m.kind !== "top5");
+  // Hero = the top5 slate. ponytail: top_model stays reachable at /markets, pending a decision to retire it.
+  const open = all.filter((m) => m.week_start === week && m.kind !== "top_model");
   const slugs = open.flatMap((m) => (m.model_permaslug ? [m.model_permaslug] : []));
   const cards = open.map((m) => {
     const bets = marketBets(m.id);
-    if (m.kind === "top_model") {
-      const tally = new Map<string, number>();
-      for (const b of bets) if (b.choice_text) tally.set(b.choice_text, (tally.get(b.choice_text) ?? 0) + b.stake);
-      const lead = [...tally].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    if (m.kind === "top5") {
+      // Options are last week's top 10, already in rank order.
       const options: string[] = JSON.parse(m.options_json ?? "[]");
       const lastOf = (s: string) => (usage.get(s) ?? []).filter((p) => isCovered(p.week)).at(-1)?.tokens ?? 0;
-      const total = options.reduce((a, o) => a + lastOf(o), 0) || 1;
       return {
-        kind: "top" as const,
+        kind: "slate" as const,
         m,
-        count: options.length,
         betCount: bets.length,
-        lead: lead && { slug: lead, name: displayName(lead, options, names) },
-        options: options.map((o) => ({ slug: o, name: displayName(o, options, names), tokens: lastOf(o), share: (lastOf(o) / total) * 100 })),
+        options: options.map((o) => ({ slug: o, name: displayName(o, options, names), tokens: lastOf(o) })),
       };
     }
     // Complete weeks only: the trailing bucket is partial and would fake a crash.
@@ -65,18 +62,88 @@ export async function loader({ request }: Route.LoaderArgs) {
   return { week, closes, cards, settled, scale, user: await getUser(request) };
 }
 
-/** Hero form: place a top_model bet without leaving the page. */
+/** Hero form: submit a top5 slate without leaving the page. */
 export async function action({ request }: Route.ActionArgs) {
   const user = await requireUser(request);
   const f = await request.formData();
-  const option = String(f.get("option") ?? "");
-  if (!option) return { error: "Pick a model" };
+  const slate = [1, 2, 3, 4, 5].map((i) => String(f.get(`slot${i}`) ?? ""));
+  if (slate.some((s) => !s)) return { error: "Fill all 5 slots" };
   try {
-    placeBet(user.id, Number(f.get("market")), Number(f.get("stake")), option);
+    placeBet(user.id, Number(f.get("market")), Number(f.get("stake")), slate);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Prediction failed" };
   }
-  return { ok: `Prediction placed on ${displayName(option, [], modelNames())}` };
+  return { ok: "Slate submitted" };
+}
+
+type Opt = { slug: string; name: string; tokens: number };
+/** Tap-to-rank: tapping a model fills the next empty slot; tapping a filled slot (or the model again) clears it. */
+function SlateHero({ marketId, options, betCount, karma, result }: { marketId: number; options: Opt[]; betCount: number; karma: number | null; result?: { error: string } | { ok: string } }) {
+  const [slots, setSlots] = useState<(string | null)[]>([null, null, null, null, null]);
+  const byslug = new Map(options.map((o) => [o.slug, o]));
+  const toggle = (slug: string) =>
+    setSlots((cur) => {
+      const at = cur.indexOf(slug);
+      const next = [...cur];
+      if (at >= 0) next[at] = null;
+      else {
+        const free = next.indexOf(null);
+        if (free >= 0) next[free] = slug;
+      }
+      return next;
+    });
+  const clear = (i: number) => setSlots((cur) => cur.map((s, j) => (j === i ? null : s)));
+  const left = slots.filter((s) => !s).length;
+  return (
+    <section className="card hero">
+      <h2>Rank next week's top 5</h2>
+      <p className="muted">{betCount ? `${betCount} ${betCount === 1 ? "slate" : "slates"} submitted` : "No slates yet. Submit the first one."} · Exact slot 1 pt, in the top 5 elsewhere 0.4 pt.</p>
+      <Form method="post" className="slate">
+        <input type="hidden" name="market" value={marketId} />
+        <ol className="slots" aria-label="Your top 5">
+          {slots.map((s, i) => (
+            <li key={i}>
+              <input type="hidden" name={`slot${i + 1}`} value={s ?? ""} />
+              <button type="button" className={`slot${s ? " filled" : ""}`} onClick={() => s && clear(i)} aria-label={s ? `Slot ${i + 1}: ${byslug.get(s)?.name}. Tap to clear` : `Slot ${i + 1}, empty`}>
+                <span className="slot-n">#{i + 1}</span>
+                <span className="slot-name">{s ? byslug.get(s)?.name : ""}</span>
+              </button>
+            </li>
+          ))}
+        </ol>
+        <div className="ranking">
+          <p className="muted">Last week's ranking · tap to place</p>
+          <ol>
+            {options.map((o, i) => {
+              const at = slots.indexOf(o.slug);
+              return (
+                <li key={o.slug}>
+                  <button type="button" className="pick" aria-pressed={at >= 0} onClick={() => toggle(o.slug)} title={o.slug} disabled={at < 0 && left === 0}>
+                    <span className="pick-rank">{i + 1}</span>
+                    <span className="pick-name">{o.name}</span>
+                    <span className="muted">{compact(o.tokens)}</span>
+                    <span className="pick-slot">{at >= 0 ? `→ #${at + 1}` : ""}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+        <div className="hero-submit">
+          {karma === null ? (
+            <Link className="btn" to="/login">Log in to rank</Link>
+          ) : (
+            <>
+              <label>Stake <input name="stake" type="number" min="1" step="1" defaultValue={50} required /> <span className="muted">of {karma.toLocaleString()} karma</span></label>
+              <button className="btn" type="submit" disabled={left > 0}>{left > 0 ? `Pick ${left} more` : "Submit slate"}</button>
+            </>
+          )}
+          {result && "error" in result && <p className="error">{result.error}</p>}
+          {result && "ok" in result && <p className="up">{result.ok}</p>}
+        </div>
+      </Form>
+    </section>
+  );
 }
 
 const dm = (w: string) => new Date(`${w}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
@@ -102,37 +169,8 @@ export default function Home({ loaderData: { week, closes, cards, settled, scale
       <p className="muted">{week ? `Closes in ${closes}` : "No market is currently open for betting."}</p>
       <div className="grid">
         {cards.map((c) =>
-          c.kind === "top" ? (
-            <section key={c.m.id} className="card hero">
-              <h2>Who's #1 by tokens next week?</h2>
-              <p className="muted">
-                {c.lead ? <>Crowd leads: <span title={c.lead.slug}>{c.lead.name}</span> · {c.betCount} predictions</> : "No predictions yet. Make the first one."}
-              </p>
-              <Form method="post" className="hero-form">
-                <input type="hidden" name="market" value={c.m.id} />
-                <fieldset>
-                  <legend className="muted">Last week's share of the top {c.count}</legend>
-                  {c.options.map((o) => (
-                    <label key={o.slug} className="option" title={o.slug}>
-                      <input type="radio" name="option" value={o.slug} required disabled={!user} />
-                      <span className="option-name">{o.name}</span>
-                      <span className="option-bar" style={{ width: `${o.share}%` }} />
-                      <span className="muted">{compact(o.tokens)}</span>
-                    </label>
-                  ))}
-                </fieldset>
-                {user ? (
-                  <div className="hero-submit">
-                    <label>Stake <input name="stake" type="number" min="1" step="1" defaultValue={50} required /> <span className="muted">of {user.karma.toLocaleString()} karma</span></label>
-                    <button className="btn" type="submit">Predict</button>
-                  </div>
-                ) : (
-                  <Link className="btn" to="/login">Log in to predict</Link>
-                )}
-                {actionData && "error" in actionData && <p className="error">{actionData.error}</p>}
-                {actionData && "ok" in actionData && <p className="up">{actionData.ok}</p>}
-              </Form>
-            </section>
+          c.kind === "slate" ? (
+            <SlateHero key={c.m.id} marketId={c.m.id} options={c.options} betCount={c.betCount} karma={user?.karma ?? null} result={actionData} />
           ) : (
             <section key={c.m.id} className="card">
               <h2 title={c.m.model_permaslug!}>{c.name}</h2>
