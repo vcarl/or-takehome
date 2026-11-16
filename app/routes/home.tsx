@@ -152,7 +152,7 @@ function SlateHero({ marketId, options, betCount, karma, result }: { marketId: n
               <input type="hidden" name={`slot${i + 1}`} value={s ?? ""} />
               <input type="hidden" name={`conf${i + 1}`} value={conf[i]} />
               <span className="gutter" aria-hidden="true">
-                <span className="slot-n">#{i + 1}</span>
+                <span className="slot-n">{i + 1}</span>
                 {s && <span className="grip">⠿</span>}
               </span>
               <button type="button" className={`slot${s ? " filled" : ""}`} onClick={() => s && clear(i)} aria-label={s ? `Slot ${i + 1}: ${byslug.get(s)?.name}. Tap to clear, or drag to reorder` : `Slot ${i + 1}, empty`}>
