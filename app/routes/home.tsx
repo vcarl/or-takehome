@@ -330,13 +330,17 @@ export default function Home({ loaderData: { week, closes, cards, settled, scale
               {s.id ? <Link to={`/markets/${s.id}`}>Week of {dm(s.week)}</Link> : `Week of ${dm(s.week)}`}{" "}
               <span className="muted">· #1 <span title={s.topSlug ?? undefined}>{s.top ?? "n/a"}</span></span>
               {s.growth.length > 0 && (
-                <div className="settled-growth">
-                  {s.growth.map((g) => (
-                    <Link key={g.id} to={`/markets/${g.id}`} title={g.slug}>
-                      {g.name} <span className={g.pct >= 0 ? "up" : "down"}>{g.pct >= 0 ? "+" : "−"}{Math.abs(g.pct).toFixed(Math.abs(g.pct) < 10 ? 1 : 0)}%</span>
-                    </Link>
-                  ))}
-                </div>
+                <details className="settled-growth">
+                  <summary>{s.growth.length} growth markets</summary>
+                  <ul>
+                    {s.growth.map((g) => (
+                      <li key={g.id}>
+                        <Link to={`/markets/${g.id}`} title={g.slug}>{g.name}</Link>
+                        <span className={g.pct >= 0 ? "up" : "down"}>{g.pct >= 0 ? "+" : "−"}{Math.abs(g.pct).toFixed(Math.abs(g.pct) < 10 ? 1 : 0)}%</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               )}
             </li>
           ))}
