@@ -181,8 +181,8 @@ export default function Home({ loaderData: { week, closes, cards, settled, scale
                   <span className={c.wow >= 0 ? "up" : "down"}>{c.wow >= 0 ? "▲" : "▼"} {Math.abs(c.wow).toFixed(1)}%</span>
                 )}
               </span>
-              <span className="muted">{c.median === null ? "No predictions yet" : `Crowd: ${c.median > 0 ? "+" : ""}${c.median.toFixed(0)}% · ${c.betCount} predictions`}</span>
-              <Link className="btn" to={`/markets/${c.m.id}`}>Predict</Link>
+              {c.median !== null && <span className="muted">Crowd: {`${c.median > 0 ? "+" : ""}${c.median.toFixed(0)}%`} · {c.betCount} predictions</span>}
+              <Link className="btn" to={`/markets/${c.m.id}`}>{c.median === null ? "Make the first prediction" : "Predict"}</Link>
             </section>
           ),
         )}
