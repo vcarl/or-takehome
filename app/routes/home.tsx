@@ -91,7 +91,7 @@ export async function action({ request }: Route.ActionArgs) {
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Prediction failed" };
   }
-  return { ok: "Slate submitted" };
+  return { ok: "Prediction submitted" };
 }
 
 type Opt = { slug: string; name: string; tokens: number };
@@ -129,10 +129,13 @@ function SlateHero({ marketId, options, betCount, karma, result }: { marketId: n
   };
   const left = slots.filter((s) => !s).length;
   return (
-    <section className="card hero">
+    <section className="hero">
       <h2>Rank next week's top 5</h2>
-      <p className="muted">{betCount ? `${betCount} ${betCount === 1 ? "slate" : "slates"} submitted` : "No slates yet. Submit the first one."} · Exact slot 1 pt, in the top 5 elsewhere 0.4 pt.</p>
-      <Form method="post" className="slate">
+      <p className="muted">
+        Rank the five models you think will use the most tokens next week. Payouts reward calling what changes: repeating last week's order returns only 90% of your stake, and spotting a model that moves up or down earns more. ·{" "}
+        {betCount ? `${betCount} ${betCount === 1 ? "prediction" : "predictions"} so far` : "No predictions yet. Make the first one."}
+      </p>
+      <Form method="post" className="slate card">
         <input type="hidden" name="market" value={marketId} />
         <ol className="slots" aria-label="Your top 5">
           {slots.map((s, i) => (
@@ -160,9 +163,14 @@ function SlateHero({ marketId, options, betCount, karma, result }: { marketId: n
               )}
             </li>
           ))}
+          {slots.some(Boolean) && (
+            <li className="muted legend">
+              Tap a slot's chip to set how sure you are of that exact position. <strong>Lean</strong> is safe. <strong>Likely</strong> pays more if right. <strong>Lock</strong> pays most if right, but costs most if wrong.
+            </li>
+          )}
         </ol>
         <div className="ranking">
-          <p className="muted">Last week's ranking · tap to place</p>
+          <p className="muted">Last week's ranking · tap to place, drag to reorder, tap a slot to clear</p>
           <ol>
             {options.map((o, i) => {
               const at = slots.indexOf(o.slug);
@@ -185,7 +193,7 @@ function SlateHero({ marketId, options, betCount, karma, result }: { marketId: n
           ) : (
             <>
               <label>Stake <input name="stake" type="number" min="1" step="1" defaultValue={10} required /> <span className="muted">of {karma.toLocaleString()} karma</span></label>
-              <button className="btn" type="submit" disabled={left > 0}>{left > 0 ? `Pick ${left} more` : "Submit slate"}</button>
+              <button className="btn" type="submit" disabled={left > 0}>{left > 0 ? `Pick ${left} more` : "Submit prediction"}</button>
             </>
           )}
           {result && "error" in result && <p className="error">{result.error}</p>}

@@ -90,3 +90,22 @@ footer div { border-top: 1px solid var(--border); padding-top: var(--space); col
 .card-stats { display: flex; align-items: center; gap: .5rem; white-space: nowrap; }
 .card-stats .spark { flex: 1 1 auto; min-width: 2.5rem; max-width: 120px; margin-left: auto; }
 .spark .tick { stroke: var(--border); stroke-width: 1; }
+.slots li.legend { display: block; font-size: .85em; margin-top: .25rem; }
+.summary { font-size: 1.1rem; margin-top: 0; }
+.strip { display: grid; gap: 2px; }
+.strip-row { display: grid; grid-template-columns: 8rem 1fr 4rem 3.5rem; align-items: center; gap: .5rem; font-size: .9em; }
+.strip-row.house, .strip-row.crowd { font-weight: 600; }
+.strip-row.me .strip-label { color: var(--accent); font-weight: 600; }
+.strip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.strip-val, .strip-skill { text-align: right; font-variant-numeric: tabular-nums; }
+.strip-track { position: relative; height: 1.4rem; }
+.strip-bar { position: absolute; top: .45rem; height: .5rem; border-radius: 3px; background: color-mix(in srgb, var(--muted) 35%, transparent); }
+.strip-bar.hit { background: color-mix(in srgb, var(--good) 40%, transparent); }
+.house .strip-bar { background: none; border: 1.5px dashed var(--muted); top: .4rem; }
+.crowd .strip-bar { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.strip-dot { position: absolute; top: .35rem; width: .7rem; height: .7rem; margin-left: -.35rem; border-radius: 50%; background: var(--fg); }
+.strip-actual { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--accent); }
+.strip-axis .strip-track { height: 1rem; }
+.strip-tick { position: absolute; transform: translateX(-50%); color: var(--muted); font-size: .8em; }
+.strip-tick:first-child { transform: none; }
+.strip-tick:last-child { transform: translateX(-100%); }
